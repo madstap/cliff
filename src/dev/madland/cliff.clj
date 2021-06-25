@@ -26,8 +26,8 @@
          (map-keys #(add-namespace commands %) opts)))
 
 (defn read-arguments [arguments arg-config]
-  (->> (map (fn [arg {:keys [name] :as cfg}]
-              [name arg])
+  (->> (map (fn [arg {:keys [id] :as cfg}]
+              [id arg])
             arguments
             arg-config)
        (into {})))

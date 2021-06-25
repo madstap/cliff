@@ -18,8 +18,8 @@
    ["worktree"
     ["add" {:opts [["-b" "--b BRANCH"]]
             :handler worktree-add}]
-    ["move" {:args [{:name :worktree}
-                    {:name :new-path}]
+    ["move" {:args [{:id :worktree}
+                    {:id :new-path}]
              :handler worktree-move}]]])
 
 (deftest parse-args-test
