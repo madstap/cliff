@@ -1,6 +1,7 @@
 (ns dev.madland.cliff-test
   (:require [dev.madland.cliff :as cliff]
-            [clojure.test :refer [deftest is]]))
+            [clojure.test :refer [deftest is]]
+            [matcher-combinators.test :refer [match?]]))
 
 (defn log [ctx])
 

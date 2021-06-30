@@ -2,5 +2,12 @@
  :tasks
  {clj-test (clojure "-X:test")
   bb-test {:extra-paths ["test" "bb-test-runner"]
+           :extra-deps {nubank/matcher-combinators
+                        {;; :mvn/version "3.2.1"
+                         :local/root "../forks/matcher-combinators/"}
+                        borkdude/spartan.spec
+                        {:git/url "https://github.com/borkdude/spartan.spec"
+                         :sha "12947185b4f8b8ff8ee3bc0f19c98dbde54d4c90"}}
+           :requires ([spartan.spec])
            :task test-runner/run}
   test {:depends [clj-test bb-test]}}}
