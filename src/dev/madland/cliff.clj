@@ -43,6 +43,7 @@
       (let [{:keys [opts handler args] :as props}
             (commands->opts commands)
 
+            ;; TODO: error handling
             {:keys [options errors] new-arguments :arguments :as parsed}
             (if opts
               (cli/parse-opts arguments opts :in-order (nil? args))
@@ -51,7 +52,8 @@
             new-ctx
             (-> ctx
                 (update ::parsed-options conj-some
-                        (some-> options not-empty (assoc ::commands commands))))]
+                        (some-> (not-empty options)
+                                (assoc ::commands commands))))]
 
         (cond (and (nil? handler)
                    (empty? new-arguments))
@@ -72,9 +74,12 @@
                            more-args)
                     (update new-ctx ::errors conj
                             (str "Unknown command " command))))
+                ;; TODO: This means that handlers can only be leaves.
+                ;;       which is probably not necessary.
                 (if (some? handler)
                   (assoc new-ctx ::handler handler)
-                  (update new-ctx ::errors (fnil conj [])))))))))
+                  (update new-ctx ::errors (fnil conj [])
+                          (str "No handler for " commands)))))))))
 
 (defn prep-parsed-opts [parsed-options]
   (transduce (map #(dissoc % ::commands)) merge parsed-options))
