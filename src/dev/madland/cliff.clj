@@ -95,6 +95,6 @@
   (let [{:keys [handler] :as ctx} (parse-args args command-decl)]
     (handler ctx)))
 
-(defn bb-run! [command-decl]
+(defn bb! [command-decl]
   (when (= *file* (System/getProperty "babashka.file"))
     (run! *command-line-args* command-decl)))
