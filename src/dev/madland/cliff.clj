@@ -92,7 +92,7 @@
       (parse-args-2)))
 
 (defn run! [args command-decl]
-  (let [{:keys [handler] :as ctx} (parse-args args command-decl)]
+  (let [{::keys [handler] :as ctx} (parse-args args command-decl)]
     (handler ctx)))
 
 (defn bb! [command-decl]
