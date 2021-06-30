@@ -91,29 +91,6 @@
   (-> (parse-args-1 arguments command-decl)
       (parse-args-2)))
 
-(comment
-
-
-  (parse-args-2
-   (parse-args-1 ["--foo"]
-                 ["cmd" {:opts [["-f" "--foo" "foo"]]
-                         :handler identity}]))
-
-
-
-  (parse-args-2
-   (parse-args-1 ["--foo" "foobar"]
-                 ["cmd" {:opts [["-f" "--foo" "foo"]]
-                         :args [{:id :bar}]
-                         :handler identity}]))
-
-  (parse-args-1 ["--foo" "foobar" "nested"]
-                ["cmd" {:opts [["-f" "--foo" "foo"]]
-                        :args [{:id :bar}]}
-                 ["nested" {:handler identity}]])
-
-  )
-
 (defn run! [args command-decl]
   (let [{:keys [handler] :as ctx} (parse-args args command-decl)]
     (handler ctx)))
