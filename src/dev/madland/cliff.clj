@@ -3,28 +3,6 @@
   (:require [clojure.tools.cli :as cli]
             [clojure.string :as str]))
 
-(defn next-props [[props & _]]
-  (when (map? props)
-    props))
-
-(defn next-command-decl [command-decl command]
-  (let [command->nxt (->> command-decl
-                          (filter vector?)
-                          (map (juxt first rest))
-                          (into {}))]
-    (command->nxt command)))
-
-(defn add-namespace [commands k]
-  (keyword (str/join "." commands) (name k)))
-
-(defn map-keys [f m]
-  (into {} (map (fn [[k v]] [(f k) v])) m))
-
-(defn add-options [accumulated-opts opts commands]
-  (merge accumulated-opts
-         opts
-         (map-keys #(add-namespace commands %) opts)))
-
 (defn read-arguments [arguments arg-config]
   (->> (map (fn [arg {:keys [id] :as cfg}]
               [id arg])
@@ -32,39 +10,109 @@
             arg-config)
        (into {})))
 
-(defn assoc-some
-  ([m k v]
-   (cond-> m (some? v) (assoc k v)))
-  ([m k v & kvs]
-   (reduce (partial apply assoc-some) (assoc-some m k v) (partition 2 kvs))))
 
-(defn parse-args* [{:keys [commands] :as ctx} args command-decl]
-  (if (or (nil? args) (nil? command-decl))
-    ctx
-    (let [{:keys [opts handler] args-decl :args, :as props}
-          (next-props command-decl)]
-      (if (or (some? handler) (some? opts)) ;; Either a leaf, has opts or both.
-        (let [{:keys [options arguments] :as parsed}
-              (cli/parse-opts args opts :in-order true)
-              new-ctx (update ctx :options add-options options commands)]
-          (if (some? handler)
-            (let [parsed-args (read-arguments arguments args-decl)]
-              (assoc-some new-ctx :handler handler :arguments parsed-args))
-            (let [[command & more-args] arguments]
-              (recur (-> new-ctx (update :commands conj command))
-                     more-args
-                     (next-command-decl command-decl command)))))
-        (let [[command & more-args] args]
-          (recur (-> ctx (update :commands conj command))
-                 more-args
-                 (next-command-decl command-decl command)))))))
+(defn flatten-command-decl
+  [command-decl]
+  (letfn [(step [acc commands [command & [?conf :as command-decl]]]
+            (let [conf (when (map? ?conf) ?conf)
+                  new-commands (conj commands command)
+                  new-acc (assoc acc new-commands conf)]
+              (->> (filter vector? command-decl)
+                   (map #(step new-acc new-commands %))
+                   (reduce merge new-acc))))]
+    (step {} [] command-decl)))
 
-(defn parse-args [args command-decl]
-  (parse-args* {:commands []
-                :options {}
-                :errors []}
-               (cons (first command-decl) args)
-               [command-decl]))
+(defn next-commands [commands commands->opts]
+  (->> (keys commands->opts)
+       (filter #(= commands (butlast %)))
+       (map last)
+       set
+       not-empty))
+
+(defn conj-some [coll & xs]
+  (apply conj coll (remove nil? xs)))
+
+(defn parse-args-1
+  [arguments [app-name :as command-decl]]
+  (let [commands->opts (flatten-command-decl command-decl)]
+    (loop [{::keys [commands], :as ctx} {::commands [app-name]
+                                         ::parsed-options []
+                                         ::errors nil}
+           arguments arguments]
+      (let [{:keys [opts handler args] :as props}
+            (commands->opts commands)
+
+            {:keys [options errors] new-arguments :arguments :as parsed}
+            (if opts
+              (cli/parse-opts arguments opts :in-order (nil? args))
+              {:arguments arguments})
+
+            new-ctx
+            (-> ctx
+                (update ::parsed-options conj-some
+                        (some-> options not-empty (assoc ::commands commands))))]
+
+        (cond (and (nil? handler)
+                   (empty? new-arguments))
+              (update new-ctx ::errors conj "Insufficient input")
+
+              (some? args)
+              ;; TODO: Error handling here.
+              (let [parsed-args (-> (read-arguments new-arguments args)
+                                    (assoc ::commands commands))]
+                (-> new-ctx
+                    (assoc ::arguments parsed-args ::handler handler)))
+
+              :else
+              (if-some [nxt (next-commands commands commands->opts)]
+                (let [[command & more-args] new-arguments]
+                  (if (contains? nxt command)
+                    (recur (update new-ctx ::commands conj command)
+                           more-args)
+                    (do (prn nxt new-arguments)
+                        (update new-ctx ::errors conj
+                                (str "Unknown command " command)))))
+                (if (some? handler)
+                  (assoc new-ctx ::handler handler)
+                  (update new-ctx ::errors (fnil conj [])))))))))
+
+(defn prep-parsed-opts [parsed-options]
+  (transduce (map #(dissoc % ::commands)) merge parsed-options))
+
+(defn prep-parsed-args [parsed-args]
+  (dissoc parsed-args ::commands))
+
+(defn parse-args-2 [{::keys [commands parsed-options arguments] :as parsed}]
+  (let [config (merge (prep-parsed-opts parsed-options)
+                      (prep-parsed-args arguments))]
+    (merge parsed config)))
+
+(defn parse-args [arguments command-decl]
+  (-> (parse-args-1 arguments command-decl)
+      (parse-args-2)))
+
+(comment
+
+
+  (parse-args-2
+   (parse-args-1 ["--foo"]
+                 ["cmd" {:opts [["-f" "--foo" "foo"]]
+                         :handler identity}]))
+
+
+
+  (parse-args-2
+   (parse-args-1 ["--foo" "foobar"]
+                 ["cmd" {:opts [["-f" "--foo" "foo"]]
+                         :args [{:id :bar}]
+                         :handler identity}]))
+
+  (parse-args-1 ["--foo" "foobar" "nested"]
+                ["cmd" {:opts [["-f" "--foo" "foo"]]
+                        :args [{:id :bar}]}
+                 ["nested" {:handler identity}]])
+
+  )
 
 (defn run! [args command-decl]
   (let [{:keys [handler] :as ctx} (parse-args args command-decl)]

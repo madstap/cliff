@@ -16,41 +16,49 @@
                   ["-g" "--graph" "dsa"]]
            :handler log}]
    ["worktree"
-    ["add" {:opts [["-b" "--b BRANCH"]]
+    ["add" {:opts [["-b" nil
+                    :id :branch
+                    :required "BRANCH"]]
             :handler worktree-add}]
     ["move" {:args [{:id :worktree}
                     {:id :new-path}]
              :handler worktree-move}]]])
 
 (deftest parse-args-test
-  (is (= {:commands ["git" "log"],
-          :options
-          {:git-dir "/other/proj/.git",
-           :git/git-dir "/other/proj/.git",
-           :oneline true,
-           :graph true,
-           :git.log/oneline true,
-           :git.log/graph true},
-          :errors [],
-          :handler log,
-          :arguments {}}
+  (is (= {:dev.madland.cliff/commands ["git" "log"]
+          :dev.madland.cliff/parsed-options
+          [{:git-dir "/other/proj/.git" :dev.madland.cliff/commands ["git"]}
+           {:oneline true
+            :graph true
+            :dev.madland.cliff/commands ["git" "log"]}]
+          :dev.madland.cliff/errors nil
+          :dev.madland.cliff/handler log
+          :git-dir "/other/proj/.git"
+          :oneline true
+          :graph true}
          (cliff/parse-args ["--git-dir=/other/proj/.git" "log" "--oneline" "--graph"] git)))
-  (is (= {:commands ["git" "worktree" "add"],
-          :options
-          {:git-dir "/other/proj/.git",
-           :git/git-dir "/other/proj/.git",
-           :b "foo",
-           :git.worktree.add/b "foo"},
-          :errors [],
-          :handler worktree-add
-          :arguments {}}
+  (is (= {:dev.madland.cliff/commands ["git" "worktree" "add"]
+          :dev.madland.cliff/parsed-options
+          [{:git-dir "/other/proj/.git" :dev.madland.cliff/commands ["git"]}
+           {:branch "foo"
+            :dev.madland.cliff/commands ["git" "worktree" "add"]}]
+          :dev.madland.cliff/errors nil
+          :dev.madland.cliff/handler worktree-add
+          :git-dir "/other/proj/.git"
+          :branch "foo"}
          (cliff/parse-args ["--git-dir=/other/proj/.git" "worktree" "add" "-b" "foo"] git)))
-  (is (= {:commands ["git" "worktree" "move"],
-          :options
-          {:git-dir "/other/proj/.git", :git/git-dir "/other/proj/.git"},
-          :errors [],
-          :handler worktree-move,
-          :arguments {:worktree "foo", :new-path "bar"}}
+  (is (= {:dev.madland.cliff/commands ["git" "worktree" "move"]
+          :dev.madland.cliff/parsed-options
+          [{:git-dir "/other/proj/.git" :dev.madland.cliff/commands ["git"]}]
+          :dev.madland.cliff/errors nil
+          :dev.madland.cliff/arguments
+          {:worktree "foo"
+           :new-path "bar"
+           :dev.madland.cliff/commands ["git" "worktree" "move"]}
+          :dev.madland.cliff/handler worktree-move
+          :git-dir "/other/proj/.git"
+          :worktree "foo"
+          :new-path "bar"}
          (cliff/parse-args ["--git-dir=/other/proj/.git" "worktree" "move" "foo" "bar"] git))))
 
 (comment
