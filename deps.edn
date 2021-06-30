@@ -1,6 +1,7 @@
 {:paths ["src"]
  :deps {org.clojure/clojure   {:mvn/version "1.11.0-alpha1"}
-        org.clojure/tools.cli {:mvn/version "1.0.206"}}
+        org.clojure/tools.cli {:mvn/version "1.0.206"}
+        babashka/fs           {:mvn/version "0.0.5"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps
