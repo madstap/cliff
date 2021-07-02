@@ -6,11 +6,20 @@
             [babashka.fs :as fs]))
 
 (defn read-arguments [arguments arg-config]
-  (->> (map (fn [arg {:keys [id] :as cfg}]
-              [id arg])
-            arguments
-            arg-config)
-       (into {})))
+  ;; TODO: Error handling
+  (let [[normal-args [{vararg-id :id}]]
+        (if (:varargs (first arg-config))
+          [[] arg-config]
+          (partition-by :varargs arg-config))
+
+        normal-parsed (->> (map (fn [arg {:keys [id] :as cfg}]
+                                  [id arg])
+                                arguments
+                                normal-args)
+                           (into {}))
+        vararg-vals (vec (drop (count normal-args) arguments))]
+    (cond-> normal-parsed
+      (some? vararg-id) (assoc vararg-id vararg-vals))))
 
 (defn flatten-command-decl
   [command-decl]
@@ -33,11 +42,15 @@
 (defn conj-some [coll & xs]
   (apply conj coll (remove nil? xs)))
 
+(defn map-vals [f m]
+  (into {} (map (fn [[k v]] [k (f v)])) m))
+
+;; Do the initial parsing, collecting all the strings
 (defn parse-args-1
   [arguments [app-name :as command-decl]]
   (let [commands->opts (flatten-command-decl command-decl)]
     (loop [{::keys [commands], :as ctx} {::commands [app-name]
-                                         ::parsed-options []
+                                         ::parsed-options {}
                                          ::errors nil}
            arguments arguments]
       (let [{:keys [opts handler args] :as props}
@@ -51,9 +64,10 @@
 
             new-ctx
             (-> ctx
-                (update ::parsed-options conj-some
-                        (some-> (not-empty options)
-                                (assoc ::commands commands))))]
+                (update ::parsed-options merge
+                        (map-vals (fn [v] {:value v
+                                           ::commands commands})
+                                  options)))]
 
         (cond (and (nil? handler)
                    (empty? new-arguments))
@@ -61,8 +75,9 @@
 
               (some? args)
               ;; TODO: Error handling here.
-              (let [parsed-args (-> (read-arguments new-arguments args)
-                                    (assoc ::commands commands))]
+              (let [parsed-args
+                    (->> (read-arguments new-arguments args)
+                         (map-vals #(hash-map :value % ::commands commands)))]
                 (-> new-ctx
                     (assoc ::arguments parsed-args ::handler handler)))
 
@@ -81,20 +96,21 @@
                   (update new-ctx ::errors (fnil conj [])
                           (str "No handler for " commands)))))))))
 
-(defn prep-parsed-opts [parsed-options]
-  (transduce (map #(dissoc % ::commands)) merge parsed-options))
+(defn parsed-values [parsed-options]
+  (map-vals :value parsed-options))
 
-(defn prep-parsed-args [parsed-args]
-  (dissoc parsed-args ::commands))
 
-(defn parse-args-2 [{::keys [commands parsed-options arguments] :as parsed}]
-  (let [config (merge (prep-parsed-opts parsed-options)
-                      (prep-parsed-args arguments))]
+;; Get a map of the keys and values we're actually after, merge that into the
+;; top level of the context.
+(defn merge-config-to-top-level
+  [{::keys [commands parsed-options arguments] :as parsed}]
+  (let [config (merge (parsed-values parsed-options)
+                      (parsed-values arguments))]
     (merge parsed config)))
 
 (defn parse-args [arguments command-decl]
   (-> (parse-args-1 arguments command-decl)
-      (parse-args-2)))
+      merge-config-to-top-level))
 
 (defn run! [args command-decl]
   (let [{::keys [handler] :as ctx} (parse-args args command-decl)]

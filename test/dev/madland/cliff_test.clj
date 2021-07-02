@@ -2,6 +2,13 @@
   (:require [dev.madland.cliff :as cliff]
             [clojure.test :refer [deftest is]]))
 
+(deftest read-arguments-test
+  (is (= {:x 1, :y 2} (cliff/read-arguments [1 2] [{:id :x} {:id :y}])))
+  (is (= {:xs [1 2 3]}
+         (cliff/read-arguments [1 2 3] [{:id :xs :varargs true}])))
+  (is (= {:x 1 :xs [2 3]}
+         (cliff/read-arguments [1 2 3] [{:id :x} {:id :xs :varargs true}]))))
+
 (defn log [ctx])
 
 (defn worktree-add [ctx])
@@ -27,7 +34,8 @@
 (deftest parse-args-test
   (is (= {::cliff/commands ["cmd"],
           ::cliff/parsed-options
-          [{:foo true, ::cliff/commands ["cmd"]}],
+          {:foo {:value true
+                 ::cliff/commands ["cmd"]}},
           ::cliff/errors nil,
           ::cliff/handler identity
           :foo true}
@@ -36,10 +44,12 @@
                                    :handler identity}])))
   (is (= {::cliff/commands ["cmd"],
           ::cliff/parsed-options
-          [{:foo true, ::cliff/commands ["cmd"]}],
+          {:foo {:value true
+                 ::cliff/commands ["cmd"]}},
           ::cliff/errors nil,
           ::cliff/arguments
-          {:bar "foobar", ::cliff/commands ["cmd"]},
+          {:bar {:value "foobar"
+                 ::cliff/commands ["cmd"]}},
           ::cliff/handler identity
           :foo true,
           :bar "foobar"}
@@ -49,10 +59,12 @@
                                    :handler identity}])))
   (is (= {::cliff/commands ["cmd" "nested"]
           ::cliff/parsed-options
-          [{:foo true, ::cliff/commands ["cmd"]}]
+          {:foo {:value true
+                 ::cliff/commands ["cmd"]}}
           ::cliff/errors nil
           ::cliff/arguments
-          {:bar "foobar", ::cliff/commands ["cmd" "nested"]}
+          {:bar {:value "foobar"
+                 ::cliff/commands ["cmd" "nested"]}}
           ::cliff/handler identity
           :foo true
           :bar "foobar"}
@@ -64,10 +76,12 @@
 (deftest git-parse-args-test
   (is (= {::cliff/commands ["git" "log"]
           ::cliff/parsed-options
-          [{:git-dir "/other/proj/.git" ::cliff/commands ["git"]}
-           {:oneline true
-            :graph true
-            ::cliff/commands ["git" "log"]}]
+          {:git-dir {:value "/other/proj/.git"
+                     ::cliff/commands ["git"]}
+           :oneline {:value true
+                     ::cliff/commands ["git" "log"]}
+           :graph {:value true
+                   ::cliff/commands ["git" "log"]}}
           ::cliff/errors nil
           ::cliff/handler log
           :git-dir "/other/proj/.git"
@@ -76,9 +90,10 @@
          (cliff/parse-args ["--git-dir=/other/proj/.git" "log" "--oneline" "--graph"] git)))
   (is (= {::cliff/commands ["git" "worktree" "add"]
           ::cliff/parsed-options
-          [{:git-dir "/other/proj/.git" ::cliff/commands ["git"]}
-           {:branch "foo"
-            ::cliff/commands ["git" "worktree" "add"]}]
+          {:git-dir {:value "/other/proj/.git"
+                     ::cliff/commands ["git"]}
+           :branch {:value "foo"
+                    ::cliff/commands ["git" "worktree" "add"]}}
           ::cliff/errors nil
           ::cliff/handler worktree-add
           :git-dir "/other/proj/.git"
@@ -86,12 +101,14 @@
          (cliff/parse-args ["--git-dir=/other/proj/.git" "worktree" "add" "-b" "foo"] git)))
   (is (= {::cliff/commands ["git" "worktree" "move"]
           ::cliff/parsed-options
-          [{:git-dir "/other/proj/.git" ::cliff/commands ["git"]}]
+          {:git-dir {:value "/other/proj/.git"
+                     ::cliff/commands ["git"]}}
           ::cliff/errors nil
           ::cliff/arguments
-          {:worktree "foo"
-           :new-path "bar"
-           ::cliff/commands ["git" "worktree" "move"]}
+          {:worktree  {:value "foo"
+                       ::cliff/commands ["git" "worktree" "move"]}
+           :new-path {:value "bar"
+                      ::cliff/commands ["git" "worktree" "move"]}}
           ::cliff/handler worktree-move
           :git-dir "/other/proj/.git"
           :worktree "foo"
