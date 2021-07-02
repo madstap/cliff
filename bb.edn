@@ -3,4 +3,4 @@
  {clj-test (clojure "-X:test")
   bb-test {:extra-paths ["test" "bb-test-runner"]
            :task test-runner/run}
-  test {:depends [clj-test bb-test]}}}
+  test {:depends [bb-test clj-test]}}}

@@ -23,5 +23,9 @@
                              (mapv test-file->test-ns))
         _ (apply require test-namespaces)
         test-results (apply test/run-tests test-namespaces)
-        {:keys [fail error]} test-results]
-    (System/exit (+ fail error))))
+        {:keys [fail error]} test-results
+        exit (+ fail error)]
+    ;; Babashka considers a task not successfull if it throws an
+    ;; exception, even with {:babashka/exit 0}
+    (when-not (zero? exit)
+      (throw (ex-info "Tests failed" {:babashka/exit exit})))))
