@@ -45,6 +45,21 @@
 (defn map-vals [f m]
   (into {} (map (fn [[k v]] [k (f v)])) m))
 
+(def tools-cli-opt-keys
+  [:id :short-opt :long-opt :required :desc :default :default-desc :default-fn
+   :parse-fn :assoc-fn :update-fn :multi :post-validation
+   :validate-fn :validate-msg :missing])
+
+(defn remove-unknown-keys [opts]
+  (mapv #(if (map? %)
+           (select-keys % tools-cli-opt-keys)
+           (let [[sopt-lopt-desc kvs] (split-with (some-fn string? nil?) %)
+                 m (apply hash-map kvs)]
+             (into (vec sopt-lopt-desc)
+                   cat
+                   (select-keys m tools-cli-opt-keys))))
+        opts))
+
 ;; Do the initial parsing, collecting all the strings
 (defn parse-args-1
   [arguments [app-name :as command-decl]]
@@ -59,7 +74,8 @@
             ;; TODO: error handling
             {:keys [options errors] new-arguments :arguments :as parsed}
             (if opts
-              (cli/parse-opts arguments opts :in-order (nil? args))
+              (cli/parse-opts arguments (remove-unknown-keys opts)
+                              :in-order (nil? args))
               {:arguments arguments})
 
             new-ctx
