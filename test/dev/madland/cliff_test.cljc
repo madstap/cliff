@@ -48,6 +48,13 @@
 
 (def nested #(identity %))
 
+(defn reset-fn [a]
+  (fn [ctx]
+    (reset! a ctx)))
+
+(defn throw-fn [ctx]
+  (throw (ex-info "" ctx)))
+
 (def ambiguous1
   ["amb" {:opts [[nil "--aa"] [nil "--bb"]]
           :args [{:id :x}]
