@@ -15,11 +15,14 @@
     (mapv str $)
     (str/join "." $)
     (str/replace $ #"_" "-")
-    (str/replace $ #".clj$" "")
+    (str/replace $ #"\.cljc?$" "")
     (symbol $)))
 
+(def dir "test")
+
 (defn run []
-  (let [test-namespaces (->> (fs/glob "test" "**/*_test.clj")
+  (let [test-namespaces (->> (concat (fs/glob dir "**/*_test.clj")
+                                     (fs/glob dir "**/*_test.cljc"))
                              (mapv test-file->test-ns))
         _ (apply require test-namespaces)
         test-results (apply test/run-tests test-namespaces)
