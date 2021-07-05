@@ -23,6 +23,12 @@
 (defn conj-some [coll & xs]
   (apply conj coll (remove nil? xs)))
 
+(defn assoc-some
+  ([ m k v]
+   (cond-> m (some? v) (assoc k v)))
+  ([m k v & kvs]
+   (reduce (partial apply assoc-some) (assoc-some m k v) (partition 2 kvs))))
+
 (defn map-vals [f m]
   (into {} (map (fn [[k v]] [k (f v)])) m))
 

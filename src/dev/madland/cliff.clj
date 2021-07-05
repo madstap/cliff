@@ -79,33 +79,38 @@
                    (empty? new-arguments))
               (update new-ctx ::errors conj "Insufficient input")
 
-              (some? args)
-              ;; TODO: Error handling here.
-              (let [parsed-args
-                    (->> (read-arguments new-arguments args)
-                         (utils/map-kv-vals
-                          (fn [k v]
-                            (merge (id->arg-config k)
-                                   {:id k
-                                    :value v
-                                    ::commands commands}))))]
-                (-> new-ctx
-                    (assoc ::arguments parsed-args ::handler handler)))
-
               :else
-              (if-some [nxt (next-commands commands commands->opts)]
+              (let [nxt (next-commands commands commands->opts)]
                 (let [[command & more-args] new-arguments]
                   (if (contains? nxt command)
                     (recur (update new-ctx ::commands conj command)
                            more-args)
-                    (update new-ctx ::errors conj
-                            (str "Unknown command " command))))
-                ;; TODO: This means that handlers can only be leaves.
-                ;;       which is probably not necessary.
-                (if (some? handler)
-                  (assoc new-ctx ::handler handler)
-                  (update new-ctx ::errors (fnil conj [])
-                          (str "No handler for " commands)))))))))
+                    ;; TODO: Error handling here.
+                    (let [parsed-args
+                          (if (nil? args)
+                            nil
+                            (->> (read-arguments new-arguments args)
+                                 (utils/map-kv-vals
+                                  (fn [k v]
+                                    (merge (id->arg-config k)
+                                           {:id k
+                                            :value v
+                                            ::commands commands})))))
+
+                          new-new-ctx (utils/assoc-some new-ctx ::arguments parsed-args)
+                          new-new-arguments (drop (count parsed-args)
+                                                  new-arguments)]
+
+                      (-> new-new-ctx
+                          (utils/assoc-some ::handler handler)
+                          (cond-> (nil? handler)
+                            (update ::errors (fnil conj [])
+                                    (str "No handler for " commands))
+
+                            (seq new-new-arguments)
+                            (-> (assoc ::extra-input new-new-arguments)
+                                (update ::errors (fnil conj [])
+                                        "Extra input")))))))))))))
 
 (defn parsed-values [parsed-options]
   (utils/map-vals :value parsed-options))

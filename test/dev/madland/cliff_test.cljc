@@ -61,19 +61,14 @@
           :handler identity}
    ["nested" {:handler nested}]])
 
-#_
 (deftest ambiguous
   (is (match? {::cliff/commands ["amb" "nested"],
-               ::cliff/parsed-options {},
                ::cliff/errors nil,
-               ::cliff/arguments {},
                ::cliff/handler (=fn nested)}
               (cliff/parse-args ["nested"] ambiguous1)))
 
   (is (match? {::cliff/commands ["amb" "nested"],
-               ::cliff/parsed-options {},
                ::cliff/errors nil,
-               ::cliff/arguments {},
                ::cliff/handler (=fn nested)}
               (cliff/parse-args ["nested"] ambiguous2))))
 
@@ -85,7 +80,8 @@
                                 ["foo" {:opts [[nil "--aa"] [nil "--bb"]]
                                         :args [{:id :x}]
                                         :handler identity}])))
-  #_(testing "ambiguous"
+
+  (testing "ambiguous"
     (is (match? {::cliff/commands ["amb"],
                  ::cliff/parsed-options
                  {:aa {:value true ::cliff/commands ["amb"]}
@@ -97,7 +93,7 @@
                  :x "foo"
                  :aa true
                  :bb true}
-                (cliff/parse-args ["-a" "foo" "-b"] ambiguous1)))))
+                (cliff/parse-args ["--aa" "foo" "--bb"] ambiguous1)))))
 
 (deftest parse-args-test
   (is (match? {::cliff/commands ["cmd"],
