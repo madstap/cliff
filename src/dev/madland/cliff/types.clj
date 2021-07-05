@@ -43,7 +43,13 @@
    :symbol
    {:parse [symbol]
     :pre-validate
-    [has-whitespace? "Can't have whitespace in symbols."]}})
+    [has-whitespace? "Can't have whitespace in symbols."]}
+
+   :enum
+   {:parse [:keyword]
+    :pre-validate [:keyword]
+    ;; TODO: How to do this?
+    :validate [(constantly true) "???"]}})
 
 (defn partition-pairs [pairs]
   (partition-by symbol? pairs))
