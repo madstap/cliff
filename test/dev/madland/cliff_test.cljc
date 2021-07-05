@@ -38,6 +38,10 @@
               (cliff/parse-args ["--foo" "123"]
                                 ["cmd" {:opts [["-f" "--foo X" "foo"
                                                 :type :int]]
+                                        :handler identity}])))
+  (is (match? {:foo 123}
+              (cliff/parse-args ["123"]
+                                ["cmd" {:args [{:id :foo :type :int}]
                                         :handler identity}]))))
 
 (defn =fn [f] #(= % f))

@@ -56,6 +56,8 @@
             id->compiled-opts (->> (cli*/compile-option-specs opts)
                                    (utils/index-by :id))
 
+            id->arg-config (utils/index-by :id args)
+
             ;; TODO: error handling
             {:keys [options errors] new-arguments :arguments :as parsed}
             (if opts
@@ -81,7 +83,12 @@
               ;; TODO: Error handling here.
               (let [parsed-args
                     (->> (read-arguments new-arguments args)
-                         (utils/map-vals #(hash-map :value % ::commands commands)))]
+                         (utils/map-kv-vals
+                          (fn [k v]
+                            (merge (id->arg-config k)
+                                   {:id k
+                                    :value v
+                                    ::commands commands}))))]
                 (-> new-ctx
                     (assoc ::arguments parsed-args ::handler handler)))
 
