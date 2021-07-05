@@ -3,6 +3,9 @@
   (:require [clojure.tools.cli :as cli]
             [clojure.string :as str]
             [clojure.edn :as edn]
+            [dev.madland.cliff.utils :as utils]
+            [dev.madland.cliff.types :as types]
+            [dev.madland.cliff.vendor.tools-cli :as cli*]
             [babashka.fs :as fs]))
 
 (defn read-arguments [arguments arg-config]
@@ -39,27 +42,6 @@
        set
        not-empty))
 
-(defn conj-some [coll & xs]
-  (apply conj coll (remove nil? xs)))
-
-(defn map-vals [f m]
-  (into {} (map (fn [[k v]] [k (f v)])) m))
-
-(def tools-cli-opt-keys
-  [:id :short-opt :long-opt :required :desc :default :default-desc :default-fn
-   :parse-fn :assoc-fn :update-fn :multi :post-validation
-   :validate-fn :validate-msg :missing])
-
-(defn remove-unknown-keys [opts]
-  (mapv #(if (map? %)
-           (select-keys % tools-cli-opt-keys)
-           (let [[sopt-lopt-desc kvs] (split-with (some-fn string? nil?) %)
-                 m (apply hash-map kvs)]
-             (into (vec sopt-lopt-desc)
-                   cat
-                   (select-keys m tools-cli-opt-keys))))
-        opts))
-
 ;; Do the initial parsing, collecting all the strings
 (defn parse-args-1
   [arguments [app-name :as command-decl]]
@@ -71,19 +53,25 @@
       (let [{:keys [opts handler args] :as props}
             (commands->opts commands)
 
+            id->compiled-opts (->> (cli*/compile-option-specs opts)
+                                   (utils/index-by :id))
+
             ;; TODO: error handling
             {:keys [options errors] new-arguments :arguments :as parsed}
             (if opts
-              (cli/parse-opts arguments (remove-unknown-keys opts)
+              (cli/parse-opts arguments (cli*/remove-unknown-keys opts)
                               :in-order (nil? args))
               {:arguments arguments})
 
             new-ctx
             (-> ctx
                 (update ::parsed-options merge
-                        (map-vals (fn [v] {:value v
-                                           ::commands commands})
-                                  options)))]
+                        (utils/map-kv-vals (fn [k v]
+                                             (merge (id->compiled-opts k)
+                                                    {:id k
+                                                     :value v
+                                                     ::commands commands}))
+                                           options)))]
 
         (cond (and (nil? handler)
                    (empty? new-arguments))
@@ -93,7 +81,7 @@
               ;; TODO: Error handling here.
               (let [parsed-args
                     (->> (read-arguments new-arguments args)
-                         (map-vals #(hash-map :value % ::commands commands)))]
+                         (utils/map-vals #(hash-map :value % ::commands commands)))]
                 (-> new-ctx
                     (assoc ::arguments parsed-args ::handler handler)))
 
@@ -113,8 +101,32 @@
                           (str "No handler for " commands)))))))))
 
 (defn parsed-values [parsed-options]
-  (map-vals :value parsed-options))
+  (utils/map-vals :value parsed-options))
 
+(defn collect-errors [{::keys [errors parsed-options arguments]}]
+  ;; TODO:
+  )
+
+(defn apply-defaults [parsed command-decl]
+  parsed)
+
+(defn parse-and-validate [parsed-values commands->opts]
+  (utils/map-vals
+   (fn [{:keys [type value]
+         :or {type :string}
+         :as parsed-val}]
+     (-> (merge parsed-val
+                (types/parse-and-validate types/types type value))
+         (assoc :initial-value value)))
+   parsed-values))
+
+(defn parse-and-validate-all [parsed command-decl]
+  (let [commands->opts (flatten-command-decl command-decl)]
+    (-> parsed
+        (utils/update-existing ::parsed-options
+                               parse-and-validate commands->opts)
+        (utils/update-existing ::arguments
+                               parse-and-validate commands->opts))))
 
 ;; Get a map of the keys and values we're actually after, merge that into the
 ;; top level of the context.
@@ -126,9 +138,11 @@
 
 (defn parse-args [arguments command-decl]
   (-> (parse-args-1 arguments command-decl)
+      (apply-defaults command-decl)
+      (parse-and-validate-all command-decl)
       merge-config-to-top-level))
 
-(defn run! [args command-decl]
+(defn run! [args [_ global-props :as command-decl]]
   (let [{::keys [handler] :as ctx} (parse-args args command-decl)]
     (handler ctx)))
 

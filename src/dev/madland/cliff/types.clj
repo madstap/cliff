@@ -21,6 +21,7 @@
    :port {:parse [:int]
           :validate
           [#(< 0 % 0x10000) "Must be a number between 0 and 65536"]}
+   :string {}
    :url {} ;; TODO: validate
    :url/host {} ;; TODO: validate
    :url/path {} ;; TODO: validate
@@ -83,11 +84,12 @@
     (if-some [pre-errors (invoke-validate types :pre-validate pre-validate value)]
       {:errors pre-errors
        :value value}
-      (let [{v :value parse-errors :errors} (invoke-parse types parse value)]
-        (if parse-errors
-          {:errors parse-errors
-           :value v}
-          (if-some [errors (invoke-validate types :validate validate v)]
-            {:errors errors
-             :value v}
-            {:value v}))))))
+      (-> (let [{v :value parse-errors :errors} (invoke-parse types parse value)]
+            (if parse-errors
+              {:errors parse-errors
+               :value v}
+              (if-some [errors (invoke-validate types :validate validate v)]
+                {:errors errors
+                 :value v}
+                {:value v})))
+          (assoc :initial-value value)))))
