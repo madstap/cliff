@@ -20,9 +20,11 @@
 
 (def dir "test")
 
+(def exts #{"clj" "cljc"})
+
 (defn run []
-  (let [test-namespaces (->> (concat (fs/glob dir "**/*_test.clj")
-                                     (fs/glob dir "**/*_test.cljc"))
+  (let [test-namespaces (->> exts
+                             (mapcat #(fs/glob dir (str "**/*_test." %)))
                              (mapv test-file->test-ns))
         _ (apply require test-namespaces)
         test-results (apply test/run-tests test-namespaces)
