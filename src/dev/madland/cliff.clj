@@ -35,6 +35,23 @@
                    (reduce merge new-acc))))]
     (step {} [] command-decl)))
 
+(defn recursive-concat-env [command-decl]
+  (utils/walk-props command-decl (fn [{:keys [env]} child]
+                                   (update child :env #(vec (concat env %))))))
+
+(comment
+
+  (recursive-concat-env ["foo" {:env [{:id :foo}]}
+                         ["bar"
+                          ["baz" {:env [{:id :baz}]}]]])
+
+  )
+
+(defn compile-command-decl [command-decl]
+  (-> command-decl
+      recursive-concat-env
+      flatten-command-decl))
+
 (defn next-commands [commands commands->opts]
   (->> (keys commands->opts)
        (filter #(= commands (butlast %)))
@@ -45,12 +62,12 @@
 ;; Do the initial parsing, collecting all the strings
 (defn parse-args-1
   [arguments [app-name :as command-decl]]
-  (let [commands->opts (flatten-command-decl command-decl)]
+  (let [commands->opts (compile-command-decl command-decl)]
     (loop [{::keys [commands], :as ctx} {::commands [app-name]
                                          ::parsed-options {}
                                          ::errors nil}
            arguments arguments]
-      (let [{:keys [opts handler args] :as props}
+      (let [{:keys [opts handler args env] :as props}
             (commands->opts commands)
 
             id->compiled-opts (->> (cli*/compile-option-specs opts)
@@ -80,37 +97,39 @@
               (update new-ctx ::errors conj "Insufficient input")
 
               :else
-              (let [nxt (next-commands commands commands->opts)]
-                (let [[command & more-args] new-arguments]
-                  (if (contains? nxt command)
-                    (recur (update new-ctx ::commands conj command)
-                           more-args)
-                    ;; TODO: Error handling here.
-                    (let [parsed-args
-                          (if (nil? args)
-                            nil
-                            (->> (read-arguments new-arguments args)
-                                 (utils/map-kv-vals
-                                  (fn [k v]
-                                    (merge (id->arg-config k)
-                                           {:id k
-                                            :value v
-                                            ::commands commands})))))
+              (let [nxt (next-commands commands commands->opts)
+                    [command & more-args] new-arguments]
+                (if (contains? nxt command)
+                  (recur (update new-ctx ::commands conj command)
+                         more-args)
+                  ;; TODO: Error handling here.
+                  (let [parsed-args
+                        (if (nil? args)
+                          nil
+                          (->> (read-arguments new-arguments args)
+                               (utils/map-kv-vals
+                                (fn [k v]
+                                  (merge (id->arg-config k)
+                                         {:id k
+                                          :value v
+                                          ::commands commands})))))
 
-                          new-new-ctx (utils/assoc-some new-ctx ::arguments parsed-args)
-                          new-new-arguments (drop (count parsed-args)
-                                                  new-arguments)]
+                        new-new-ctx (utils/assoc-some new-ctx ::arguments parsed-args)
+                        new-new-arguments (drop (count parsed-args)
+                                                new-arguments)]
 
-                      (-> new-new-ctx
-                          (utils/assoc-some ::handler handler)
-                          (cond-> (nil? handler)
-                            (update ::errors (fnil conj [])
-                                    (str "No handler for " commands))
+                    (-> new-new-ctx
+                        (utils/assoc-some ::handler handler
+                                          ::env (not-empty
+                                                 (utils/index-by :id env)))
+                        (cond-> (nil? handler)
+                          (update ::errors (fnil conj [])
+                                  (str "No handler for " commands))
 
-                            (seq new-new-arguments)
-                            (-> (assoc ::extra-input new-new-arguments)
-                                (update ::errors (fnil conj [])
-                                        "Extra input")))))))))))))
+                          (seq new-new-arguments)
+                          (-> (assoc ::extra-input new-new-arguments)
+                              (update ::errors (fnil conj [])
+                                      "Extra input"))))))))))))
 
 (defn parsed-values [parsed-options]
   (utils/map-vals :value parsed-options))
@@ -118,9 +137,6 @@
 (defn collect-errors [{::keys [errors parsed-options arguments]}]
   ;; TODO:
   )
-
-(defn apply-defaults [parsed command-decl]
-  parsed)
 
 (defn parse-and-validate [parsed-values commands->opts]
   (utils/map-vals
@@ -133,26 +149,36 @@
    parsed-values))
 
 (defn parse-and-validate-all [parsed command-decl]
-  (let [commands->opts (flatten-command-decl command-decl)]
+  (let [commands->opts (compile-command-decl command-decl)]
     (-> parsed
         (utils/update-existing ::parsed-options
                                parse-and-validate commands->opts)
         (utils/update-existing ::arguments
+                               parse-and-validate commands->opts)
+        (utils/update-existing ::env
                                parse-and-validate commands->opts))))
 
 ;; Get a map of the keys and values we're actually after, merge that into the
 ;; top level of the context.
 (defn merge-config-to-top-level
-  [{::keys [commands parsed-options arguments] :as parsed}]
-  (let [config (merge (parsed-values parsed-options)
+  [{::keys [commands parsed-options arguments env] :as parsed}]
+  (let [config (merge (parsed-values env)
+                      (parsed-values parsed-options)
                       (parsed-values arguments))]
     (merge parsed config)))
 
-(defn parse-args [arguments command-decl]
-  (-> (parse-args-1 arguments command-decl)
-      (apply-defaults command-decl)
-      (parse-and-validate-all command-decl)
-      merge-config-to-top-level))
+(defn fetch-env [parsed env-vars]
+  (update parsed ::env
+          (partial utils/map-vals #(assoc % :value (get env-vars (:var %))))))
+
+(defn parse-args
+  ([arguments command-decl]
+   (parse-args arguments command-decl (System/getenv)))
+  ([arguments command-decl env-vars]
+   (-> (parse-args-1 arguments command-decl)
+       (fetch-env env-vars)
+       (parse-and-validate-all command-decl)
+       merge-config-to-top-level)))
 
 (defn run! [args [_ global-props :as command-decl]]
   (let [{::keys [handler] :as ctx} (parse-args args command-decl)]
