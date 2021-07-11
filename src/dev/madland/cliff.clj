@@ -6,6 +6,7 @@
             [dev.madland.cliff.utils :as utils]
             [dev.madland.cliff.types :as types]
             [dev.madland.cliff.vendor.tools-cli :as cli*]
+            [dev.madland.cliff.middleware :as mware]
             [babashka.fs :as fs]))
 
 (defn read-arguments [arguments arg-config]
@@ -175,15 +176,40 @@
   ([arguments command-decl]
    (parse-args arguments command-decl (System/getenv)))
   ([arguments command-decl env-vars]
-   (-> (parse-args-1 arguments command-decl)
-       (fetch-env env-vars)
-       (parse-and-validate-all command-decl)
-       merge-config-to-top-level)))
+   (let [prepped (-> command-decl
+                     mware/add-fx-middleware
+                     mware/apply-middleware)]
+     (-> (parse-args-1 arguments prepped)
+         (fetch-env env-vars)
+         (parse-and-validate-all prepped)
+         merge-config-to-top-level
+         (assoc ::cli prepped)))))
 
 (defn run! [args [_ global-props :as command-decl]]
   (let [{::keys [handler] :as ctx} (parse-args args command-decl)]
-    (handler ctx)))
+    (handler ctx)
+    nil))
 
 (defn bb! [command-decl]
   (when (= *file* (System/getProperty "babashka.file"))
     (run! *command-line-args* command-decl)))
+
+(comment
+
+  ;; TODO: Make these into tests
+  ["foo" {}
+   ["bar" {:middleware [(fn [handler]
+                          (fn [ctx]
+                            (prn "fooo")
+                            (handler ctx)))]
+           :handler prn}]]
+
+
+  (run!
+   ["bar"]
+   ["foo" {}
+    ["bar" {:fx :println
+            :handler identity}]])
+
+
+  )

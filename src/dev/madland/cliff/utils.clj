@@ -12,6 +12,31 @@
                     (if props? more-w-props more-no-props))))]
     (step ::nothing command-decl)))
 
+(defn map-props
+  [command-decl f]
+  (letfn [(step [[command & [props & more-w-props :as more-no-props]]]
+            (let [props? (map? props)
+                  new-props (f (if props? props {}))]
+              (into [command new-props]
+                    (map step)
+                    (if props? more-w-props more-no-props))))]
+    (step command-decl)))
+
+
+(comment
+
+  ;; TODO: Tests
+  (map-props
+   ["foo" {:x 1}
+    ["bar" {:x 2}]]
+   #(assoc % :foo 123))
+
+  (walk-props
+   ["foo" {:x 1}
+    ["bar" {:y 2}]]
+   merge)
+  )
+
 (defn update-existing [m k f & args]
   (if (contains? m k)
     (apply update m k f args)
