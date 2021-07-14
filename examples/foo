@@ -1,0 +1,24 @@
+#!/usr/bin/env bb
+;; -*- mode: clojure; -*-
+(require '[babashka.deps :as deps])
+
+(deps/add-deps
+ '{:deps {dev.madland/cliff
+          {;; :git/url "https://github.com/madstap/cliff.git"
+           ;; :sha     "bea41a0bdf5c0f7eb714b152017d9843eff20d0a"
+           :local/root ".."}}})
+
+(ns foo
+  (:require [dev.madland.cliff :as cliff]))
+
+(def cli
+  ["foo" {}
+   ["bar" {:opts [["-f" "--foo F"
+                   :type :dir]
+                  [nil "--an-enum E"
+                   :type :enum
+                   :values [:wooot :bar :baz]]]
+           :fx :pprint
+           :handler identity}]])
+
+(cliff/bb! cli)

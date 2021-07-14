@@ -12,8 +12,39 @@
 (defn parse-keyword [s]
   (keyword (second (re-find #"^:?(.*)$" s))))
 
+(defn bare-keyword-str [k]
+  (str (some-> (namespace k) (str "/")) (name k)))
+
 (defn has-whitespace? [s]
   (not (re-find #"\s" s)))
+
+(def dir "")
+
+(defn expand-tilde [s]
+  (str/replace s #"^~" (System/getenv "HOME")))
+
+(defn ls [dir]
+  (map #(cond-> (str %) (fs/directory? %) (str "/"))
+       (fs/list-dir (fs/file (expand-tilde dir)))))
+
+;; (defn dir? [file]
+;;   (fs/directory? (expand-tilde file)))
+
+:complete/sources
+:complete/filters
+
+;; A source is a function that produces a sequence of suggestions.
+;; Is currently passed the opt or arg map, which is useful for passing
+;; :fs/dir for example.
+
+;; A filter is a predicate that filters each suggestion from a source.
+;; Currently arity [opt-map word].
+
+(defn enum-source [{:keys [values dev.madland/word]}]
+  (map (if (and (some? word) (str/starts-with? word ":"))
+         str
+         bare-keyword-str)
+       values))
 
 (def types
   {:int {:parse [#(Long/parseLong %) "Invalid format for int"]}
@@ -23,12 +54,17 @@
           [#(< 0 % 0x10000) "Must be a number between 0 and 65536"]}
    :string {}
    :url {} ;; TODO: validate
+   :host {} ;; java.lang.InetHost ??? :net-host :Inet-host
    :url/host {} ;; TODO: validate
    :url/path {} ;; TODO: validate
-   :file {:parse [fs/file]
-          :validate [not-dir? "Can't be a directory"]}
-   :dir {:parse [fs/file]
-         :validate [not-file? "Can't be a file"]}
+   :file {:parse [fs/file ""]
+          :validate [not-dir? "Can't be a directory"]
+          :complete/sources [(fn [{:keys [fs/dir] :or {dir ""}}]
+                               (ls dir))]}
+   :dir {:parse [fs/file ""]
+         :validate [not-file? "Can't be a file"]
+         :complete/sources [:file]
+         :complete/filters [#(fs/directory? %2)]}
 
    ;; TODO: Tagged literals/data readers
    :edn-file {:parse [:file slurp edn/read-string]
@@ -49,7 +85,9 @@
    {:parse [:keyword]
     :pre-validate [:keyword]
     ;; TODO: How to do this?
-    :validate [(constantly true) "???"]}})
+    ;; validation functions could receive the props as well as the value.
+    :validate [(constantly true) "???"]
+    :complete/sources [enum-source]}})
 
 (defn partition-pairs [pairs]
   (partition-by symbol? pairs))
@@ -63,6 +101,23 @@
                      [x])))
          (resolve-pointers types kind))
     pairs))
+
+(defn invoke-completions [types {:keys [type] :as opt} word]
+  (let [{:complete/keys [sources filters]} (types type)
+        srcs (resolve-pointers types :complete/sources sources)
+        preds (resolve-pointers types :complete/filters filters)
+        opt (assoc opt :dev.madland/word word)]
+    (->> srcs
+         (mapcat #(% opt))
+         (filter (fn [completion]
+                   (every? #(% opt completion) preds))))))
+
+(comment
+
+  (invoke-completions types {:type :file} "")
+
+
+  )
 
 (defn invoke-parse [types parsers v]
   (reduce (fn [acc [f msg]]

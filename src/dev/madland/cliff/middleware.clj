@@ -42,6 +42,9 @@
 (defmethod run-fx! :print-lines [_ coll]
   (run! println coll))
 
+(defmethod run-fx! :pprint [_ s]
+  (pp/pprint s))
+
 (defmethod run-fx! :err/print-lines [_ coll]
   (with-err (run-fx! :print-lines coll)))
 
