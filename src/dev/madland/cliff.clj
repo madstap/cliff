@@ -397,6 +397,7 @@
     ;; (dbg [:tokens tokens :line line :idx idx])
 
     (->> (cond (and (contains? #{:short-opt :long-opt} l-type)
+                    (nil? l-arg)
                     (contains? (props->req-set props) l-opt))
                (types/invoke-completions types/types (opt-str->opt l-opt) word)
 
@@ -432,6 +433,12 @@
   ;; Surely some lovely bash edge-case.
   (= [":bar" ":baz"]
      (completions "zoo bar --an-enum :b" 20
+                  foo/cli))
+
+
+
+  (= ["--foo" "--an-enum"]
+     (completions "foo bar --an-enum bar --" 24
                   foo/cli))
 
   (= ["bar" "baz"]
