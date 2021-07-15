@@ -18,8 +18,6 @@
 (defn has-whitespace? [s]
   (not (re-find #"\s" s)))
 
-(def dir "")
-
 (defn expand-tilde [s]
   (str/replace s #"^~" (System/getenv "HOME")))
 
@@ -46,6 +44,27 @@
          bare-keyword-str)
        values))
 
+(defn source-dir [dir word]
+  (let [non-blank-dir? (not (str/blank? dir))
+        file-sep-in-word? (str/includes? word "/")]
+    (str (when non-blank-dir? dir)
+         (when (and non-blank-dir? file-sep-in-word?) "/")
+         (when file-sep-in-word?
+           (str (cond->> (str/split word #"/")
+                  (not (str/ends-with? word "/")) butlast
+                  true (str/join "/"))
+                "/")))))
+
+(comment
+
+  (= "" (source-dir "" "foo"))
+
+  (= "foo/" (source-dir "" "foo/"))
+
+  (= "foo/" (source-dir "" "foo/b"))
+
+  )
+
 (def types
   {:int {:parse [#(Long/parseLong %) "Invalid format for int"]}
    :float {:parse [#(Double/parseDouble %) "Invalid format for float"]}
@@ -59,8 +78,9 @@
    :url/path {} ;; TODO: validate
    :file {:parse [fs/file ""]
           :validate [not-dir? "Can't be a directory"]
-          :complete/sources [(fn [{:keys [fs/dir] :or {dir ""}}]
-                               (ls dir))]}
+          :complete/sources [(fn [{:keys [fs/dir dev.madland/word]
+                                   :or {dir ""}}]
+                               (ls (source-dir dir word)))]}
    :dir {:parse [fs/file ""]
          :validate [not-file? "Can't be a file"]
          :complete/sources [:file]
