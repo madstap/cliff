@@ -217,15 +217,20 @@
   (keep (fn [[t v]] (when (= :command t) v)) tokens))
 
 (defn tokenize-args
-  "Reduce arguments sequence into [type opt ?optarg?] vectors and a vector
-  of remaining arguments. Returns as [tokens remaining-args].
+  "Reduce arguments sequence into [type & data] vectors.
+
+  The shape of data depends on the type:
+
+  Type                  | Shape
+  -------------------------------------------
+  :short-opt, :long-opt | [type opt ?optarg?]
+  :command              | [type command]
+  :arguments            | [type & arguments]
 
   The first command is taken from the cli spec since it isn't passed on the
   command line.
 
-  type is one of :short-opt, :long-opt, :command, :arguments
-
-  Arguments always come last, if present."
+  The :arguments vector always comes last, if present."
   [args cli]
   (let [[args explicit-args] (split-- args)
         commands->props (compile-command-decl cli)]
@@ -345,10 +350,9 @@
   "function {{fn-name}}()
 {
     export COMP_LINE=${COMP_LINE}
-    export COMP_CWORD=$COMP_CWORD
     export COMP_POINT=$COMP_POINT
 
-    RESPONSE=($(${COMP_WORDS[0]} {{completion-command}} complete bash ${COMP_WORDS[@]}))
+    RESPONSE=($(${COMP_WORDS[0]} {{completion-command}} complete bash))
 
     if [ $RESPONSE = 'next' ]; then
         compopt +o nospace
@@ -511,7 +515,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 
   )
 
-(defn complete-handler [{:keys [line words cword point], ::keys [cli]}]
+(defn bash-complete-handler [{:keys [line point], ::keys [cli]}]
   #_(dbg [:comp (completions line point cli)
         :rendered (render-bash-candidates (completions line point cli))])
   (render-bash-candidates (completions line point cli)))
@@ -528,14 +532,9 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                     :var "COMP_LINE"}
                    {:id :point
                     :var "COMP_POINT"
-                    :type :int}
-                   {:id :cword
-                    :var "COMP_CWORD"
                     :type :int}]
-             :args [{:id :words
-                     :varargs true}]
              :fx :print-lines
-             :handler complete-handler}]]])
+             :handler bash-complete-handler}]]])
 
 (defn add-completions
   [[_ opts :as command-decl]]
