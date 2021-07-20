@@ -376,10 +376,10 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
   (case shell
     :bash (bash-script cli)))
 
-(defn filter-prefix [prefix words]
-  (cond->> words
+(defn filter-prefix [prefix completions]
+  (cond->> completions
     (not (str/blank? prefix))
-    (filter #(and (-> (cond-> % (map? %) :word)
+    (filter #(and (-> (cond-> % (map? %) :candidate)
                        (str/starts-with? prefix))
                   (not= % prefix)))))
 
@@ -450,9 +450,9 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                (concat possible-commands long-opts))
          (filter-prefix word))))
 
-(defn render-bash-candidates [candidates]
-  (let [words (map #(cond-> % (map? %) :word) candidates)
-        on-complete (if (->> candidates
+(defn render-bash-completions [completions]
+  (let [words (map #(cond-> % (map? %) :candidate) completions)
+        on-complete (if (->> completions
                              (map #(if (map? %) (:on-complete %) :next))
                              (every? #{:continue}))
                       "continue"
@@ -461,13 +461,17 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 
 (comment
 
-  [{:word "foo"
+  '(s/def :completion
+     (s/keys :req [:candidate]
+             :opt [:on-complete]))
+
+  [{:candidate "foo"
     :on-complete :next}]
 
-  [{:word "--foo="
+  [{:candidate "--foo="
     :on-complete :continue}]
 
-  [{:word "foo/"
+  [{:candidate "foo/"
     :on-complete :continue}]
 
   (completions "foo bar --foo src/dev/madland/" 30 foo/cli)
@@ -517,8 +521,8 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 
 (defn bash-complete-handler [{:keys [line point], ::keys [cli]}]
   #_(dbg [:comp (completions line point cli)
-        :rendered (render-bash-candidates (completions line point cli))])
-  (render-bash-candidates (completions line point cli)))
+        :rendered (render-bash-completions (completions line point cli))])
+  (render-bash-completions (completions line point cli)))
 
 (defn completions-cli [command]
   [command

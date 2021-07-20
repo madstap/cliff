@@ -24,9 +24,9 @@
 
 (defn ls [dir]
   (map #(if (fs/directory? %)
-          {:word (str % "/")
+          {:candidate (str % "/")
            :on-complete :continue}
-          {:word (str %)
+          {:candidate (str %)
            :on-complete :next})
        (fs/list-dir (fs/file (expand-tilde dir)))))
 
@@ -133,13 +133,12 @@
     (->> srcs
          (mapcat #(% opt))
          (filter (fn [completion]
-                   (let [{:keys [on-complete]
-                          w :word}
+                   (let [{:keys [on-complete candidate]}
                          (if (map? completion)
                            completion
-                           {:word completion})]
+                           {:candidate completion})]
                      (every? #(% (utils/assoc-some opt :on-complete on-complete)
-                                 w)
+                                 candidate)
                              preds)))))))
 
 (comment
