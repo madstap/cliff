@@ -7,7 +7,8 @@
             [dev.madland.cliff.types :as types]
             [dev.madland.cliff.vendor.tools-cli :as cli*]
             [dev.madland.cliff.middleware :as mware]
-            [babashka.fs :as fs]))
+            [babashka.fs :as fs]
+            [selmer.parser :as selmer]))
 
 (defn read-arguments [arguments arg-config]
   ;; TODO: Error handling
@@ -338,28 +339,45 @@
 (def default-completion-command
   "completions")
 
-(defn script [shell [command-name opts]]
-  (let [completion-command (or (and (map? opts)
-                                    (get opts :completions))
-                               default-completion-command)]
-    (case shell
-      :bash
-      (let [fn-name (sh-fn-name command-name)]
-        (str "function " fn-name "() \n"
-             (format "{
+;; https://stackoverflow.com/questions/2339246/add-spaces-to-the-end-of-some-bash-autocomplete-options-but-not-to-others/66151065#66151065
+
+(def bash-template
+  "function {{fn-name}}()
+{
     export COMP_LINE=${COMP_LINE}
     export COMP_CWORD=$COMP_CWORD
     export COMP_POINT=$COMP_POINT
 
-    COMPREPLY=($(${COMP_WORDS[0]} %s complete bash ${COMP_WORDS[@]}))
-}\n"
-                     completion-command)
-             (format "complete -F %s %s" fn-name command-name))))))
+    RESPONSE=($(${COMP_WORDS[0]} {{completion-command}} complete bash ${COMP_WORDS[@]}))
+
+    if [ $RESPONSE = 'next' ]; then
+        compopt +o nospace
+    fi
+
+    unset RESPONSE[0]
+
+    COMPREPLY=(${RESPONSE[@]})
+}
+complete -o nospace -F {{fn-name}} {{command-name}}")
+
+(defn bash-script [[command-name opts]]
+  (let [completion-command (or (and (map? opts)
+                                    (get opts :completions))
+                               default-completion-command)]
+    (selmer/render bash-template {:command-name command-name
+                                  :fn-name (sh-fn-name command-name)
+                                  :completion-command completion-command})))
+
+(defn script [shell [command-name :as cli]]
+  (case shell
+    :bash (bash-script cli)))
 
 (defn filter-prefix [prefix words]
   (cond->> words
     (not (str/blank? prefix))
-    (filter #(and (str/starts-with? % prefix) (not= % prefix)))))
+    (filter #(and (-> (cond-> % (map? %) :word)
+                       (str/starts-with? prefix))
+                  (not= % prefix)))))
 
 (defn drop-upto-last-command [tokens]
   (->> tokens
@@ -375,6 +393,20 @@
   (tokenize-args ["bar"] foo/cli)
 
   )
+
+;; TODO: Complete --long-opts= with arguments like this (with the =).
+;;       Because it gives the user more information, ie. whether
+;;       the option has an argument or not.
+
+;; TODO: It only makes sense to specify an option multiple times if it
+;;       has either :assoc-fn or :update-fn. If that is not the case we
+;;       shouldn't suggest options that have already been specified.
+
+;; TODO: Special case --help. If we have already specified any options,
+;;       don't suggest help anymore. Same for --version.
+;;       What's a good name for this?
+:complete/standalone true
+:complete/exclusive true
 
 (defn completions [line idx cli]
   (let [[arguments word] (args-and-word line idx)
@@ -407,13 +439,35 @@
                (str/starts-with? word "-")
                all-opts
 
-               ;; TODO: Args
+               ;; Find out which arg slot we're at (if there are possible args
+               ;; at this comamnd.) Concat the arg suggestions also.
 
                :else
                (concat possible-commands long-opts))
          (filter-prefix word))))
 
+(defn render-bash-candidates [candidates]
+  (let [words (map #(cond-> % (map? %) :word) candidates)
+        on-complete (if (->> candidates
+                             (map #(if (map? %) (:on-complete %) :next))
+                             (every? #{:continue}))
+                      "continue"
+                      "next")]
+    (cons on-complete words)))
+
 (comment
+
+  [{:word "foo"
+    :on-complete :next}]
+
+  [{:word "--foo="
+    :on-complete :continue}]
+
+  [{:word "foo/"
+    :on-complete :continue}]
+
+  (completions "foo bar --foo src/dev/madland/" 30 foo/cli)
+  (completions "foo bar --foo src/dev/madland/cliff/vendor/" 43 foo/cli)
 
   (completions "zoo bar --foo ." 14
                ["foo" {}
@@ -458,7 +512,9 @@
   )
 
 (defn complete-handler [{:keys [line words cword point], ::keys [cli]}]
-  (completions line point cli))
+  #_(dbg [:comp (completions line point cli)
+        :rendered (render-bash-candidates (completions line point cli))])
+  (render-bash-candidates (completions line point cli)))
 
 (defn completions-cli [command]
   [command

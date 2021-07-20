@@ -1,7 +1,8 @@
 (ns dev.madland.cliff.types
   (:require [babashka.fs :as fs]
             [clojure.edn :as edn]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [dev.madland.cliff.utils :as utils]))
 
 (defn not-file? [file]
   (or (not (fs/exists? file)) (fs/directory? file)))
@@ -22,11 +23,12 @@
   (str/replace s #"^~" (System/getenv "HOME")))
 
 (defn ls [dir]
-  (map #(cond-> (str %) (fs/directory? %) (str "/"))
+  (map #(if (fs/directory? %)
+          {:word (str % "/")
+           :on-complete :continue}
+          {:word (str %)
+           :on-complete :next})
        (fs/list-dir (fs/file (expand-tilde dir)))))
-
-;; (defn dir? [file]
-;;   (fs/directory? (expand-tilde file)))
 
 :complete/sources
 :complete/filters
@@ -44,6 +46,7 @@
          bare-keyword-str)
        values))
 
+;; TODO: Support windows
 (defn source-dir [dir word]
   (let [non-blank-dir? (not (str/blank? dir))
         file-sep-in-word? (str/includes? word "/")]
@@ -130,7 +133,14 @@
     (->> srcs
          (mapcat #(% opt))
          (filter (fn [completion]
-                   (every? #(% opt completion) preds))))))
+                   (let [{:keys [on-complete]
+                          w :word}
+                         (if (map? completion)
+                           completion
+                           {:word completion})]
+                     (every? #(% (utils/assoc-some opt :on-complete on-complete)
+                                 w)
+                             preds)))))))
 
 (comment
 
