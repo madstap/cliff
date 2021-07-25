@@ -1,7 +1,7 @@
 (ns dev.madland.cliff.utils)
 
 (defn walk-props
-  [command-decl f]
+  [cli f]
   (letfn [(step [acc [command & [props & more-w-props :as more-no-props]]]
             (let [props? (map? props)
                   new-props (if (= ::nothing acc)
@@ -10,17 +10,17 @@
               (into [command new-props]
                     (map (partial step new-props))
                     (if props? more-w-props more-no-props))))]
-    (step ::nothing command-decl)))
+    (step ::nothing cli)))
 
 (defn map-props
-  [command-decl f]
+  [cli f]
   (letfn [(step [[command & [props & more-w-props :as more-no-props]]]
             (let [props? (map? props)
                   new-props (f (if props? props {}))]
               (into [command new-props]
                     (map step)
                     (if props? more-w-props more-no-props))))]
-    (step command-decl)))
+    (step cli)))
 
 
 (comment

@@ -26,20 +26,20 @@
     (cond-> normal-parsed
       (some? vararg-id) (assoc vararg-id vararg-vals))))
 
-(defn flatten-command-decl
-  [command-decl]
-  (letfn [(step [acc commands [command & [?conf :as command-decl]]]
+(defn flatten-cli
+  [cli]
+  (letfn [(step [acc commands [command & [?conf :as cli]]]
             (let [conf (when (map? ?conf) ?conf)
                   new-commands (conj commands command)
                   new-acc (assoc acc new-commands conf)]
-              (->> (filter vector? command-decl)
+              (->> (filter vector? cli)
                    (map #(step new-acc new-commands %))
                    (reduce merge new-acc))))]
-    (step {} [] command-decl)))
+    (step {} [] cli)))
 
-(defn recursive-concat-env [command-decl]
-  (utils/walk-props command-decl (fn [{:keys [env]} child]
-                                   (update child :env #(vec (concat env %))))))
+(defn recursive-concat-env [cli]
+  (utils/walk-props cli (fn [{:keys [env]} child]
+                          (update child :env #(vec (concat env %))))))
 
 (comment
 
@@ -49,10 +49,10 @@
 
   )
 
-(defn compile-command-decl [command-decl]
-  (-> command-decl
+(defn compile-cli [cli]
+  (-> cli
       recursive-concat-env
-      flatten-command-decl))
+      flatten-cli))
 
 (defn next-commands [commands commands->opts]
   (->> (keys commands->opts)
@@ -63,8 +63,8 @@
 
 ;; Do the initial parsing, collecting all the strings
 (defn parse-args-1
-  [arguments [app-name :as command-decl]]
-  (let [commands->opts (compile-command-decl command-decl)]
+  [arguments [app-name :as cli]]
+  (let [commands->opts (compile-cli cli)]
     (loop [{::keys [commands], :as ctx} {::commands [app-name]
                                          ::parsed-options {}
                                          ::errors nil}
@@ -150,8 +150,8 @@
          (assoc :initial-value value)))
    parsed-values))
 
-(defn parse-and-validate-all [parsed command-decl]
-  (let [commands->opts (compile-command-decl command-decl)]
+(defn parse-and-validate-all [parsed cli]
+  (let [commands->opts (compile-cli cli)]
     (-> parsed
         (utils/update-existing ::parsed-options
                                parse-and-validate commands->opts)
@@ -233,7 +233,7 @@
   The :arguments vector always comes last, if present."
   [args cli]
   (let [[args explicit-args] (split-- args)
-        commands->props (compile-command-decl cli)]
+        commands->props (compile-cli cli)]
     (loop [args args
            subcommands (cli->subcommands-map cli)
            tokens [[:command (first cli)]]]
@@ -380,7 +380,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
   (cond->> completions
     (not (str/blank? prefix))
     (filter #(and (-> (cond-> % (map? %) :candidate)
-                       (str/starts-with? prefix))
+                      (str/starts-with? prefix))
                   (not= % prefix)))))
 
 (defn drop-upto-last-command [tokens]
@@ -418,7 +418,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
         commands (tokens->commands tokens)
         current-tokens (drop-upto-last-command tokens)
         [l-type l-opt l-arg] (last current-tokens)
-        commands->props (compile-command-decl cli)
+        commands->props (compile-cli cli)
         {:keys [opts args] :as props} (commands->props commands)
         compiled-opts (cli*/compile-option-specs opts)
         opt-str->opt (merge (utils/index-by :short-opt compiled-opts)
@@ -521,7 +521,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 
 (defn bash-complete-handler [{:keys [line point], ::keys [cli]}]
   #_(dbg [:comp (completions line point cli)
-        :rendered (render-bash-completions (completions line point cli))])
+          :rendered (render-bash-completions (completions line point cli))])
   (render-bash-completions (completions line point cli)))
 
 (defn completions-cli [command]
@@ -541,9 +541,9 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
              :handler bash-complete-handler}]]])
 
 (defn add-completions
-  [[_ opts :as command-decl]]
+  [[_ opts :as cli]]
   (let [o (when (map? opts) opts)]
-    (cond-> command-decl
+    (cond-> cli
       (not= [:completions nil] (find o :completions))
       (conj (completions-cli (:completions o "completions"))))))
 
@@ -559,10 +559,23 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
   )
 
 (defn parse-args
-  ([arguments command-decl]
-   (parse-args arguments command-decl (System/getenv)))
-  ([arguments command-decl env-vars]
-   (let [prepped (-> command-decl
+  "Given command line arguments and a cli spec, returns a context.
+
+  The context contains the parsed opts, args and etc keyed by their :id at
+  the top level.
+
+  It also contains some special keys namespaced with dev.madland.cliff
+  which are considered an implementation detail unless documented below.
+
+  Key                | Content
+  -------------------|---------------------------------
+  ::cliff/commands   | A vector of the commands in `arguments`
+
+  "
+  ([arguments cli]
+   (parse-args arguments cli (System/getenv)))
+  ([arguments cli env-vars]
+   (let [prepped (-> cli
                      add-completions
                      mware/add-fx-middleware
                      mware/apply-middleware)]
@@ -572,14 +585,25 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
          merge-config-to-top-level
          (assoc ::cli prepped)))))
 
-(defn run! [args [_ global-props :as command-decl]]
-  (let [{::keys [handler] :as ctx} (parse-args args command-decl)]
+(defn run!
+  "Takes a sequence of command line arguments and a cli spec and runs the
+  correct handler with the context as returned by parse-args as the argument.
+  Returns nil."
+  [args [_ global-props :as cli]]
+  (let [{::keys [handler] :as ctx} (parse-args args cli)]
     (handler ctx)
     nil))
 
-(defn bb! [command-decl]
+(defn bb!
+  "Takes a cli spec and calls run! on *command-line-args* and the cli spec
+  iff the current file is the one invoked by babashka.
+
+  Like the python `if __name__ == '__main__'` boilerplate, this means
+  that other code can require code from the script without running
+  it. It also means that we can open a repl without running the script."
+  [cli]
   (when (= *file* (System/getProperty "babashka.file"))
-    (run! *command-line-args* command-decl)))
+    (run! *command-line-args* cli)))
 
 (comment
 
