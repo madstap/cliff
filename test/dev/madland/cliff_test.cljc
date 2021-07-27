@@ -199,6 +199,18 @@
                :new-path "bar"}
               (cliff/parse-args ["--git-dir=/other/proj/.git" "worktree" "move" "foo" "bar"] git))))
 
+(deftest args-and-word-test
+  (is (= [["bar"] "b"]
+         (cliff/args-and-word "foo bar baz" 9)))
+
+  (is (= [[] "bar"]
+         (cliff/args-and-word "foo bar baz" 7)))
+
+  (is (= [[] ""]
+         (cliff/args-and-word "foo " 4)))
+
+  (is (= [[] ""] (cliff/args-and-word "" 0))))
+
 (comment
 
   (def calc

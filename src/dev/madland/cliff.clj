@@ -320,21 +320,6 @@
       [words ""]
       [(or (butlast words) ()) (last words)])))
 
-(comment
-
-  (= [["bar"] "b"]
-     (args-and-word "foo bar baz" 9))
-
-  (= [[] "bar"]
-     (args-and-word "foo bar baz" 7))
-
-  (= [[] ""]
-     (args-and-word "foo " 4))
-
-  (args-and-word "" 0)
-
-  )
-
 (defn sh-fn-name [command-name]
   (-> command-name
       munge
@@ -391,12 +376,6 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 
 (defn dbg [x]
   (spit "dbg.edn" (str (pr-str x) "\n") :append true))
-
-(comment
-
-  (tokenize-args ["bar"] foo/cli)
-
-  )
 
 ;; TODO: Complete --long-opts= with arguments like this (with the =).
 ;;       Because it gives the user more information, ie. whether
