@@ -309,21 +309,21 @@
   )
 
 (defn args-and-word
-  "GIven the line and cursor index, returns the args up to the cursor and the
+  "Given the line and cursor index, returns the args up to the cursor and the
   current word to be completed as a tuple [args word]."
   [line idx]
   (let [l (subs line 0 idx)
         ;; We ignore the first word as it will be the name of the executable
         ;; and might be an alias. Also that's how normal arguments are passed.
         words (rest (split-words l))]
-    (if-some [[opt word]
-              (some->> (last words)
-                       (re-find #"^(--[^=]+)=(.*)$")
-                       rest
-                       not-empty)]
-      [(concat (butlast words) [opt]) word]
-      (if (or (re-find #"\s$" l) (= "" l))
-        [words ""]
+    (if (or (re-find #"\s$" l) (= "" l))
+      [words ""]
+      (if-some [[opt word]
+                (some->> (last words)
+                         (re-find #"^(--[^=]+)=(.*)$")
+                         rest
+                         not-empty)]
+        [(concat (butlast words) [opt]) word]
         [(or (butlast words) ()) (or (last words) "")]))))
 
 (defn sh-fn-name [command-name]
