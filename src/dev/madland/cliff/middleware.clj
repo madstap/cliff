@@ -1,6 +1,7 @@
 (ns dev.madland.cliff.middleware
   (:refer-clojure :exclude [peek])
-  (:require [dev.madland.cliff.utils :as utils]))
+  (:require [dev.madland.cliff.utils :as utils]
+            [clojure.pprint :as pp]))
 
 (defn peek
   [{:keys [enter leave] :or {enter identity, leave identity}}]
