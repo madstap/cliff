@@ -208,7 +208,8 @@
 
   (is (= [[] ""]
          (cliff/args-and-word "foo " 4)))
-
+  (is (= [[] ""]
+         (cliff/args-and-word "foo" 3)))
   (is (= [[] ""] (cliff/args-and-word "" 0))))
 
 (comment

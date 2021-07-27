@@ -318,7 +318,7 @@
         words (rest (split-words l))]
     (if (or (re-find #"\s$" l) (= "" l))
       [words ""]
-      [(or (butlast words) ()) (last words)])))
+      [(or (butlast words) ()) (or (last words) "")])))
 
 (defn sh-fn-name [command-name]
   (-> command-name
