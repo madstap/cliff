@@ -423,7 +423,14 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
         compiled-opts (cli*/compile-option-specs opts)
         opt-str->opt (merge (utils/index-by :short-opt compiled-opts)
                             (utils/index-by :long-opt compiled-opts))
-        long-opts (keep :long-opt compiled-opts)
+        long-opts (keep (fn [{:keys [long-opt required]}]
+                          (when long-opt
+                            (if required
+                              {:candidate (str long-opt "=")
+                               :on-complete :continue}
+                              {:candidate long-opt
+                               :on-complete :next})))
+                       compiled-opts)
         all-opts (->>  compiled-opts
                        (mapcat (juxt :short-opt :long-opt))
                        (remove nil?))
@@ -440,14 +447,17 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                (str/starts-with? word "--")
                long-opts
 
-               (str/starts-with? word "-")
-               all-opts
+               ;; (str/starts-with? word "-")
+               ;; all-opts
 
                ;; Find out which arg slot we're at (if there are possible args
                ;; at this comamnd.) Concat the arg suggestions also.
 
                :else
-               (concat possible-commands long-opts))
+               (map (fn [cmd]
+                      {:candidate cmd
+                       :on-complete :next})
+                    possible-commands))
          (filter-prefix word))))
 
 (defn render-bash-completions [completions]
@@ -475,6 +485,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
     :on-complete :continue}]
 
   (completions "foo bar --foo src/dev/madland/" 30 foo/cli)
+
   (completions "foo bar --foo src/dev/madland/cliff/vendor/" 43 foo/cli)
 
   (completions "zoo bar --foo ." 14
