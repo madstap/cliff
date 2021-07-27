@@ -458,6 +458,10 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                       {:candidate cmd
                        :on-complete :next})
                     possible-commands))
+         (map #(if (map? %)
+                 %
+                 {:candidate %
+                  :on-complete :next}))
          (filter-prefix word))))
 
 (defn render-bash-completions [completions]
