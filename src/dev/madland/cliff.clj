@@ -316,9 +316,15 @@
         ;; We ignore the first word as it will be the name of the executable
         ;; and might be an alias. Also that's how normal arguments are passed.
         words (rest (split-words l))]
-    (if (or (re-find #"\s$" l) (= "" l))
-      [words ""]
-      [(or (butlast words) ()) (or (last words) "")])))
+    (if-some [[opt word]
+              (some->> (last words)
+                       (re-find #"^(--[^=]+)=(.*)$")
+                       rest
+                       not-empty)]
+      [(concat (butlast words) [opt]) word]
+      (if (or (re-find #"\s$" l) (= "" l))
+        [words ""]
+        [(or (butlast words) ()) (or (last words) "")]))))
 
 (defn sh-fn-name [command-name]
   (-> command-name

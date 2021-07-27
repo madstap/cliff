@@ -199,30 +199,17 @@
                :new-path "bar"}
               (cliff/parse-args ["--git-dir=/other/proj/.git" "worktree" "move" "foo" "bar"] git))))
 
+(defn a&w [line]
+  (cliff/args-and-word line (count line)))
+
 (deftest args-and-word-test
-  (is (= [["bar"] "b"]
-         (cliff/args-and-word "foo bar baz" 9)))
-
-  (is (= [[] "bar"]
-         (cliff/args-and-word "foo bar baz" 7)))
-
-  (is (= [[] ""]
-         (cliff/args-and-word "foo " 4)))
-  (is (= [[] ""]
-         (cliff/args-and-word "foo" 3)))
-  (is (= [[] ""] (cliff/args-and-word "" 0))))
-
-(comment
-
-  (def calc
-    ["toycalc" {:opts [[nil "--base BASE" "The number base for output"
-                        :parse-fn #(Long/parseLong %)
-                        :default 10]]
-                :version "0.0.1"}
-     ["add" {:opts []}]
-     ["subtract" {:opts []}]])
-
-  )
+  (is (= [["bar"] "b"] (cliff/args-and-word "foo bar baz" 9)))
+  (is (= [[] "bar"] (cliff/args-and-word "foo bar baz" 7)))
+  (is (= [[] ""] (a&w "foo ")))
+  (is (= [[] ""] (a&w "foo")))
+  (is (= [[] ""] (a&w "")))
+  (is (= [["--foo"] ""] (a&w "foo --foo=")))
+  (is (= [["--foo"] "b"] (a&w "foo --foo=b"))))
 
 (comment
 
