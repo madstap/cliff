@@ -475,19 +475,6 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 
 (comment
 
-  '(s/def :completion
-     (s/keys :req [:candidate]
-             :opt [:on-complete]))
-
-  [{:candidate "foo"
-    :on-complete :next}]
-
-  [{:candidate "--foo="
-    :on-complete :continue}]
-
-  [{:candidate "foo/"
-    :on-complete :continue}]
-
   (completions "foo bar --foo src/dev/madland/" 30 foo/cli)
 
   (completions "foo bar --foo src/dev/madland/cliff/vendor/" 43 foo/cli)
@@ -499,10 +486,6 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                         :fx :pprint
                         :handler identity}]])
 
-
-  (completions "zoo bar --an-enum " 18
-               foo/cli)
-
   (completions "zoo bar --an-enum :" 19
                foo/cli)
 
@@ -511,26 +494,6 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
   (= [":bar" ":baz"]
      (completions "zoo bar --an-enum :b" 20
                   foo/cli))
-
-
-
-  (= ["--foo" "--an-enum"]
-     (completions "foo bar --an-enum bar --" 24
-                  foo/cli))
-
-  (= ["bar" "baz"]
-     (completions "zoo bar --an-enum b" 19
-                  foo/cli))
-
-
-
-
-  (completions "foo " 0
-               ["foo" {}
-                ["bar" {:opts [["-f" "--foo F"
-                                :type :file]]
-                        :fx :pprint
-                        :handler identity}]])
 
   )
 
