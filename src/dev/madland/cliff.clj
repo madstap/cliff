@@ -367,7 +367,7 @@
 
     RESPONSE=($(${COMP_WORDS[0]} {{completion-command}} complete bash))
 
-    if [ $RESPONSE = 'next' ]; then
+    if [ ${RESPONSE[0]} = 'next' ]; then
         compopt +o nospace
     fi
 
