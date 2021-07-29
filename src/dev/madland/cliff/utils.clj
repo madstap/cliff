@@ -22,8 +22,27 @@
                     (if props? more-w-props more-no-props))))]
     (step cli)))
 
+(defn update-props
+  [cli commands f & args]
+  (letfn [(step [current-commands [command & [props & more-w-props :as more-no-props]]]
+            (let [props? (map? props)
+                  new-commands (conj current-commands command)
+                  update? (= new-commands commands)
+                  new-props (if update?
+                              (apply f (if props? props {}) args)
+                              (if props? props {}))]
+              (into [command new-props]
+                    (map (if update? identity (partial step new-commands)))
+                    (if props? more-w-props more-no-props))))]
+    (step [] cli)))
 
 (comment
+
+  (update-props
+   ["foo" {:x 1}
+    ["bar" {:x 1}]]
+   ["foo" "bar"]
+   assoc :y 12)
 
   ;; TODO: Tests
   (map-props

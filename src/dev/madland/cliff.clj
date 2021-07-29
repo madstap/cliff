@@ -172,7 +172,7 @@
          (assoc :initial-value value)))
    parsed-values))
 
-(defn parse-and-validate-all [parsed cli]
+(defn parse-and-validate-all [{::keys [cli] :as parsed}]
   (let [commands->opts (compile-cli cli)]
     (-> parsed
         (utils/update-existing ::parsed-options
@@ -538,6 +538,63 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 
   )
 
+(defn add-opt [opt-specs [short-opt long-opt & more]]
+  (let [compiled-opts (cli*/compile-option-specs opt-specs)
+        [short-opts long-opts] (map #(set (map % compiled-opts))
+                                    [:short-opt :long-opt])
+        opt-spec (condp = [(contains? short-opts short-opt)
+                           (contains? long-opts long-opt)]
+                   [true true] nil
+                   [false true] nil
+                   [true false] (into [nil long-opt] more)
+                   [false false] (into [short-opt long-opt] more))]
+    (utils/conj-some opt-specs opt-spec)))
+
+(comment
+  (add-opt
+   [["-h" "--hello-world" "Hi" :type :foo]]
+   ["-h" "--help" "help"])
+
+  (add-opt
+   [[nil "--hello-world" "Hi" :type :foo]]
+   ["-h" "--help" "help"])
+
+  (add-opt
+   [[nil "--help" "My-help" :type :foo]]
+   ["-h" "--help" "help"])
+
+  )
+
+(defn version-wrapper [version-string]
+  (fn [_handler]
+    (fn [_ctx]
+      (println version-string))))
+
+(defn version-opt [version-string]
+  ["-v" "--version" "Prints the current version"
+   :middleware (version-wrapper version-string)])
+
+(defn add-version-opts [[command :as cli]]
+  (utils/map-props cli (fn [{:keys [version] :as props}]
+                         (cond-> props
+                           (some? version)
+                           (update :opts add-opt (version-opt version))))))
+
+(defn assoc-handler [{::keys [cli commands] :as ctx}]
+  (assoc ctx ::handler (get-in (flatten-cli cli) [commands :handler])))
+
+(defn add-option-middleware [{::keys [parsed-options] :as ctx}]
+  (reduce-kv (fn [ctx id {:keys [middleware] ::keys [commands]}]
+               (cond-> ctx
+                 (some? middleware)
+                 (update ::cli utils/update-props commands update :middleware
+                         #(vec (concat (if (fn? middleware)
+                                         [middleware]
+                                         middleware)
+                                       %)))))
+             ctx
+             parsed-options))
+
 (defn parse-args
   "Given command line arguments and a cli spec, returns a context.
 
@@ -558,12 +615,16 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
    (let [prepped (-> cli
                      add-completions
                      mware/add-fx-middleware
-                     mware/apply-middleware)]
+                     add-version-opts)]
      (-> (parse-args-1 arguments prepped)
+         (assoc ::cli prepped)
          (fetch-env env-vars)
-         (parse-and-validate-all prepped)
+         parse-and-validate-all
+         add-option-middleware
          merge-config-to-top-level
-         (assoc ::cli prepped)))))
+         (update ::cli mware/apply-middleware)
+         assoc-handler))))
+
 
 (defn run!
   "Takes a sequence of command line arguments and a cli spec and runs the
@@ -586,6 +647,14 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
     (run! *command-line-args* cli)))
 
 (comment
+
+  (run!
+   ["--help"]
+   ["foo" {:opts [[nil   "--help" ""
+                   :middleware (fn [handler]
+                                 (fn [ctx]
+                                   (println "foooo")))]]
+           :handler clojure.pprint/pprint}])
 
   ;; TODO: Make these into tests
   ["foo" {}

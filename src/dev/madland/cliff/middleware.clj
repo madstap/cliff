@@ -24,10 +24,8 @@
 (defn apply-middleware [command-decl]
   (-> (concat-middleware command-decl)
       (utils/map-props
-       (fn [{:keys [handler middleware] :as props}]
-         (cond-> props
-           (some? handler)
-           (update :handler invoke-middleware middleware))))))
+       (fn [{:keys [middleware] :as props}]
+         (update props :handler invoke-middleware middleware)))))
 
 (defmulti run-fx! (fn [fx _] fx))
 
