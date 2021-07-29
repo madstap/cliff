@@ -44,10 +44,6 @@
                                 ["cmd" {:args [{:id :foo :type :int}]
                                         :handler identity}]))))
 
-(defn =fn [f] #(= % f))
-
-(def nested #(identity %))
-
 (defn reset-fn [a]
   (fn [ctx]
     (reset! a ctx)))
@@ -59,24 +55,24 @@
   ["amb" {:opts [[nil "--aa"] [nil "--bb"]]
           :args [{:id :x}]
           :handler identity}
-   ["nested" {:handler nested}]])
+   ["nested" {:handler identity}]])
 
 (def ambiguous2
   ["amb" {:opts [[nil "--aa"] [nil "--bb"]]
           :args [{:id :xs
                   :varargs true}]
           :handler identity}
-   ["nested" {:handler nested}]])
+   ["nested" {:handler identity}]])
 
 (deftest ambiguous
   (is (match? {::cliff/commands ["amb" "nested"],
                ::cliff/errors nil,
-               ::cliff/handler (=fn nested)}
+               ::cliff/handler fn?}
               (cliff/parse-args ["nested"] ambiguous1)))
 
   (is (match? {::cliff/commands ["amb" "nested"],
                ::cliff/errors nil,
-               ::cliff/handler (=fn nested)}
+               ::cliff/handler fn?}
               (cliff/parse-args ["nested"] ambiguous2))))
 
 (deftest order-independent-opts-and-args
@@ -96,7 +92,7 @@
                  ::cliff/errors nil,
                  ::cliff/arguments
                  {:x {::cliff/commands ["amb"], :value "foo"}},
-                 ::cliff/handler (=fn identity)
+                 ::cliff/handler fn?
                  :x "foo"
                  :aa true
                  :bb true}
@@ -109,7 +105,7 @@
                       :value true
                       ::cliff/commands ["cmd"]}},
                ::cliff/errors nil,
-               ::cliff/handler (=fn identity)
+               ::cliff/handler fn?
                :foo true}
               (cliff/parse-args ["--foo"]
                                 ["cmd" {:opts [["-f" "--foo" "foo"]]
@@ -124,7 +120,7 @@
                {:bar {:initial-value "foobar"
                       :value "foobar"
                       ::cliff/commands ["cmd"]}},
-               ::cliff/handler (=fn identity)
+               ::cliff/handler fn?
                :foo true,
                :bar "foobar"}
               (cliff/parse-args ["--foo" "foobar"]
@@ -141,7 +137,7 @@
                {:bar {:initial-value "foobar"
                       :value "foobar"
                       ::cliff/commands ["cmd" "nested"]}}
-               ::cliff/handler (=fn identity)
+               ::cliff/handler fn?
                :foo true
                :bar "foobar"}
               (cliff/parse-args ["--foo" "nested" "foobar"]
@@ -162,7 +158,7 @@
                         :value true
                         ::cliff/commands ["git" "log"]}}
                ::cliff/errors nil
-               ::cliff/handler (=fn log)
+               ::cliff/handler fn?
                :git-dir "/other/proj/.git"
                :oneline true
                :graph true}
@@ -176,7 +172,7 @@
                          :value "foo"
                          ::cliff/commands ["git" "worktree" "add"]}}
                ::cliff/errors nil
-               ::cliff/handler (=fn worktree-add)
+               ::cliff/handler fn?
                :git-dir "/other/proj/.git"
                :branch "foo"}
               (cliff/parse-args ["--git-dir=/other/proj/.git" "worktree" "add" "-b" "foo"] git)))
@@ -193,7 +189,7 @@
                 :new-path {:initial-value "bar"
                            :value "bar"
                            ::cliff/commands ["git" "worktree" "move"]}}
-               ::cliff/handler (=fn worktree-move)
+               ::cliff/handler fn?
                :git-dir "/other/proj/.git"
                :worktree "foo"
                :new-path "bar"}
