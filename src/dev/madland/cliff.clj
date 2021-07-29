@@ -7,6 +7,7 @@
             [dev.madland.cliff.types :as types]
             [dev.madland.cliff.vendor.tools-cli :as cli*]
             [dev.madland.cliff.middleware :as mware]
+            [dev.madland.cliff.help :as help]
             [babashka.fs :as fs]
             [selmer.parser :as selmer]))
 
@@ -48,17 +49,6 @@
 
   )
 
-(defn flatten-cli
-  [cli]
-  (letfn [(step [acc commands [command & [?conf :as cli]]]
-            (let [conf (when (map? ?conf) ?conf)
-                  new-commands (conj commands command)
-                  new-acc (assoc acc new-commands conf)]
-              (->> (filter vector? cli)
-                   (map #(step new-acc new-commands %))
-                   (reduce merge new-acc))))]
-    (step {} [] cli)))
-
 (defn recursive-concat-env [cli]
   (utils/walk-props cli (fn [{:keys [env]} child]
                           (update child :env #(vec (concat env %))))))
@@ -74,7 +64,7 @@
 (defn compile-cli [cli]
   (-> cli
       recursive-concat-env
-      flatten-cli))
+      utils/flatten-cli))
 
 (defn next-commands [commands commands->opts]
   (->> (keys commands->opts)
@@ -195,30 +185,6 @@
   (update parsed ::env
           (partial utils/map-vals #(assoc % :value (get env-vars (:var %))))))
 
-(defn cli->subcommands-map [cli]
-  (letfn [(step [acc [cmd & more]]
-            (assoc acc cmd (reduce step {} (filter vector? more))))]
-    (reduce step {} (filter vector? cli))))
-
-(defn cli->commands-map [cli]
-  {(first cli) (cli->subcommands-map cli)})
-
-(comment
-
-  (cli->subcommands-map
-   ["foo" {}
-    ["bar" ["baz" {}]]
-    ["quux" ["asd"]]])
-
-  (cli->commands-map
-   ["foo" {}
-    ["bar" ["baz" {}]]
-    ["quux" ["asd"]]])
-
-  (cli->subcommands-map ["foo"])
-
-  )
-
 (defn props->req-set [{:keys [opts]}]
   (->> (cli*/compile-option-specs opts)
        (filter :required)
@@ -257,7 +223,7 @@
   (let [[args explicit-args] (split-- args)
         commands->props (compile-cli cli)]
     (loop [args args
-           subcommands (cli->subcommands-map cli)
+           subcommands (utils/cli->subcommands-map cli)
            tokens [[:command (first cli)]]]
 
       (let [commands (tokens->commands tokens)
@@ -434,7 +400,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                                :on-complete :next})))
                        compiled-opts)
         short-opts (keep :short-opt compiled-opts)
-        commands-map (cli->commands-map cli)
+        commands-map (utils/cli->commands-map cli)
         possible-commands (keys (get-in commands-map commands))]
 
     ;; (dbg [:tokens tokens :line line :idx idx])
@@ -538,33 +504,6 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 
   )
 
-(defn add-opt [opt-specs [short-opt long-opt & more]]
-  (let [compiled-opts (cli*/compile-option-specs opt-specs)
-        [short-opts long-opts] (map #(set (map % compiled-opts))
-                                    [:short-opt :long-opt])
-        opt-spec (condp = [(contains? short-opts short-opt)
-                           (contains? long-opts long-opt)]
-                   [true true] nil
-                   [false true] nil
-                   [true false] (into [nil long-opt] more)
-                   [false false] (into [short-opt long-opt] more))]
-    (utils/conj-some opt-specs opt-spec)))
-
-(comment
-  (add-opt
-   [["-h" "--hello-world" "Hi" :type :foo]]
-   ["-h" "--help" "help"])
-
-  (add-opt
-   [[nil "--hello-world" "Hi" :type :foo]]
-   ["-h" "--help" "help"])
-
-  (add-opt
-   [[nil "--help" "My-help" :type :foo]]
-   ["-h" "--help" "help"])
-
-  )
-
 (defn version-wrapper [version-string]
   (fn [_handler]
     (fn [_ctx]
@@ -578,10 +517,10 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
   (utils/map-props cli (fn [{:keys [version] :as props}]
                          (cond-> props
                            (some? version)
-                           (update :opts add-opt (version-opt version))))))
+                           (update :opts utils/add-opt (version-opt version))))))
 
 (defn assoc-handler [{::keys [cli commands] :as ctx}]
-  (assoc ctx ::handler (get-in (flatten-cli cli) [commands :handler])))
+  (assoc ctx ::handler (get-in (utils/flatten-cli cli) [commands :handler])))
 
 (defn add-option-middleware [{::keys [parsed-options] :as ctx}]
   (reduce-kv (fn [ctx id {:keys [middleware] ::keys [commands]}]
@@ -602,11 +541,14 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
   the top level.
 
   It also contains some special keys namespaced with dev.madland.cliff
-  which are considered an implementation detail unless documented below.
+  which are considered an implementation detail unless documented here.
 
   Key                | Content
   -------------------|---------------------------------
-  ::cliff/commands   | A vector of the commands in `arguments`
+  ::cliff/commands   | A vector of the commands in `arguments`.
+  ::cliff/cli        | The expanded `cli`.
+  ::cliff/errors     | A vector of errors, nil if no errors.
+  ::cliff/handler    | The final handler to be invoked.
 
   "
   ([arguments cli]
@@ -615,7 +557,8 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
    (let [prepped (-> cli
                      add-completions
                      mware/add-fx-middleware
-                     add-version-opts)]
+                     add-version-opts
+                     help/add-help)]
      (-> (parse-args-1 arguments prepped)
          (assoc ::cli prepped)
          (fetch-env env-vars)

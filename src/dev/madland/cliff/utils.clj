@@ -1,4 +1,5 @@
-(ns dev.madland.cliff.utils)
+(ns dev.madland.cliff.utils
+  (:require [dev.madland.cliff.vendor.tools-cli :as cli*]))
 
 (defn walk-props
   [cli f]
@@ -36,7 +37,56 @@
                     (if props? more-w-props more-no-props))))]
     (step [] cli)))
 
+(defn flatten-cli
+  [cli]
+  (letfn [(step [acc commands [command & [?conf :as cli]]]
+            (let [conf (when (map? ?conf) ?conf)
+                  new-commands (conj commands command)
+                  new-acc (assoc acc new-commands conf)]
+              (->> (filter vector? cli)
+                   (map #(step new-acc new-commands %))
+                   (reduce merge new-acc))))]
+    (step {} [] cli)))
+
+(defn get-props [cli commands]
+  (get (flatten-cli cli) commands))
+
+(defn conj-some [coll & xs]
+  (apply conj coll (remove nil? xs)))
+
+(defn add-opt [opt-specs [short-opt long-opt & more]]
+  (let [compiled-opts (cli*/compile-option-specs opt-specs)
+        [short-opts long-opts] (map #(set (map % compiled-opts))
+                                    [:short-opt :long-opt])
+        opt-spec (condp = [(contains? short-opts short-opt)
+                           (contains? long-opts long-opt)]
+                   [true true] nil
+                   [false true] nil
+                   [true false] (into [nil long-opt] more)
+                   [false false] (into [short-opt long-opt] more))]
+    (conj-some opt-specs opt-spec)))
+
 (comment
+  (add-opt
+   [["-h" "--hello-world" "Hi" :type :foo]]
+   ["-h" "--help" "help"])
+
+  (add-opt
+   [[nil "--hello-world" "Hi" :type :foo]]
+   ["-h" "--help" "help"])
+
+  (add-opt
+   [[nil "--help" "My-help" :type :foo]]
+   ["-h" "--help" "help"])
+
+  )
+
+(comment
+
+  (get-props
+   ["foo"
+    ["bar" {:x 1}]]
+   ["foo" "bar"])
 
   (update-props
    ["foo" {:x 1}
@@ -56,6 +106,30 @@
    merge)
   )
 
+(defn cli->subcommands-map [cli]
+  (letfn [(step [acc [cmd & more]]
+            (assoc acc cmd (reduce step {} (filter vector? more))))]
+    (reduce step {} (filter vector? cli))))
+
+(defn cli->commands-map [cli]
+  {(first cli) (cli->subcommands-map cli)})
+
+(comment
+
+  (cli->subcommands-map
+   ["foo" {}
+    ["bar" ["baz" {}]]
+    ["quux" ["asd"]]])
+
+  (cli->commands-map
+   ["foo" {}
+    ["bar" ["baz" {}]]
+    ["quux" ["asd"]]])
+
+  (cli->subcommands-map ["foo"])
+
+  )
+
 (defn update-existing [m k f & args]
   (if (contains? m k)
     (apply update m k f args)
@@ -63,9 +137,6 @@
 
 (defn map-kvs [f m]
   (into {} (map f) m))
-
-(defn conj-some [coll & xs]
-  (apply conj coll (remove nil? xs)))
 
 (defn assoc-some
   ([ m k v]
