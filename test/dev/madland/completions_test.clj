@@ -67,4 +67,23 @@
              (cmps "prog --foo f"
                    ["prog" {:opts [[nil "--foo FOO"
                                     :type :enum
-                                    :values [:foo :bar]]]}]))))))
+                                    :values [:foo :bar]]]}])))))
+
+  (testing "arguments"
+    (is (= [{:candidate "foo"
+             :on-complete :next}
+            {:candidate "bar"
+             :on-complete :next}]
+           (cmps "prog "
+                 ["prog" {:args [{:id :an-enum
+                                  :type :enum
+                                  :values [:foo :bar]}]}])))
+    (is (= [{:candidate "foo"
+             :on-complete :next}
+            {:candidate "bar"
+             :on-complete :next}]
+           (cmps "prog foo foo "
+                 ["prog" {:args [{:id :an-enum
+                                  :varargs true
+                                  :type :enum
+                                  :values [:foo :bar]}]}])))))

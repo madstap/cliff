@@ -26,6 +26,28 @@
     (cond-> normal-parsed
       (some? vararg-id) (assoc vararg-id vararg-vals))))
 
+(defn current-arg [prev-arguments arg-config]
+  (let [conf (first (drop (count prev-arguments) arg-config))]
+    (if (and (nil? conf) (:varargs (last arg-config)))
+      (last arg-config)
+      conf)))
+
+(comment
+
+  (read-arguments ["foo" "bar"] [{:id :a} {:id :b}])
+
+  (read-arguments ["foo" "bar"] [{:id :a}])
+
+  (= {:id :a} (current-arg [] [{:id :a}]))
+  (= {:id :b} (current-arg ["foo"] [{:id :a} {:id :b}]))
+  (= {:id :b
+      :varargs true}
+     (current-arg ["foo" "bar"] [{:id :a} {:id :b
+                                           :varargs true}]))
+  (nil? (current-arg ["foo" "bar"] [{:id :a} {:id :b}]))
+
+  )
+
 (defn flatten-cli
   [cli]
   (letfn [(step [acc commands [command & [?conf :as cli]]]
@@ -356,8 +378,7 @@
 complete -o nospace -F {{fn-name}} {{command-name}}")
 
 (defn bash-script [[command-name opts]]
-  (let [completion-command (or (and (map? opts)
-                                    (get opts :completions))
+  (let [completion-command (or (and (map? opts) (:completions opts))
                                default-completion-command)]
     (selmer/render bash-template {:command-name command-name
                                   :fn-name (sh-fn-name command-name)
@@ -402,7 +423,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
         tokens (tokenize-args arguments cli)
         commands (tokens->commands tokens)
         current-tokens (drop-upto-last-command tokens)
-        [l-type l-opt l-arg] (last current-tokens)
+        [l-type & [l-opt l-arg :as l-args]] (last current-tokens)
         commands->props (compile-cli cli)
         {:keys [opts args] :as props} (commands->props commands)
         compiled-opts (cli*/compile-option-specs opts)
@@ -416,9 +437,10 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                               {:candidate long-opt
                                :on-complete :next})))
                        compiled-opts)
-        all-opts (->>  compiled-opts
-                       (mapcat (juxt :short-opt :long-opt))
-                       (remove nil?))
+        short-opts (keep :short-opt compiled-opts)
+        ;; all-opts (->>  compiled-opts
+        ;;                (mapcat (juxt :short-opt :long-opt))
+        ;;                (remove nil?))
         commands-map (cli->commands-map cli)
         possible-commands (keys (get-in commands-map commands))]
 
@@ -432,17 +454,19 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                (str/starts-with? word "--")
                long-opts
 
-               ;; (str/starts-with? word "-")
-               ;; all-opts
+               (str/starts-with? word "-")
+               short-opts
 
-               ;; Find out which arg slot we're at (if there are possible args
-               ;; at this comamnd.) Concat the arg suggestions also.
-
-               :else
+               (not (empty? possible-commands))
                (map (fn [cmd]
                       {:candidate cmd
                        :on-complete :next})
-                    possible-commands))
+                    possible-commands)
+
+               :else
+               (when-some [arg (current-arg (when (= :arguments l-type) l-args)
+                                            args)]
+                 (types/invoke-completions types/types arg word)))
          (map #(if (map? %)
                  %
                  {:candidate %
