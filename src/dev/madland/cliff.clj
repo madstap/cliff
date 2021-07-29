@@ -404,10 +404,6 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 (defn dbg [x]
   (spit "dbg.edn" (str (pr-str x) "\n") :append true))
 
-;; TODO: Complete --long-opts= with arguments like this (with the =).
-;;       Because it gives the user more information, ie. whether
-;;       the option has an argument or not.
-
 ;; TODO: It only makes sense to specify an option multiple times if it
 ;;       has either :assoc-fn or :update-fn. If that is not the case we
 ;;       shouldn't suggest options that have already been specified.
@@ -438,9 +434,6 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                                :on-complete :next})))
                        compiled-opts)
         short-opts (keep :short-opt compiled-opts)
-        ;; all-opts (->>  compiled-opts
-        ;;                (mapcat (juxt :short-opt :long-opt))
-        ;;                (remove nil?))
         commands-map (cli->commands-map cli)
         possible-commands (keys (get-in commands-map commands))]
 
