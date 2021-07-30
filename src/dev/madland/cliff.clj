@@ -471,14 +471,16 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
   (render-bash-completions (completions line point cli)))
 
 (defn completions-cli [command]
-  [command
-   ["script" {:args [{:id :shell
+  [command {:desc "Commands related to completions"}
+   ["script" {:desc "Print completion script"
+              :args [{:id :shell
                       :type :enum
                       :values #{:bash :zsh}}]
               :fx :println
               :handler #(script (:shell %) (::cli %))}]
-   ["complete"
-    ["bash" {:env [{:id :line
+   ["complete" {:desc "Print completions"}
+    ["bash" {:desc "Print completions for bash"
+             :env [{:id :line
                     :var "COMP_LINE"}
                    {:id :point
                     :var "COMP_POINT"
@@ -567,7 +569,6 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
          merge-config-to-top-level
          (update ::cli mware/apply-middleware)
          assoc-handler))))
-
 
 (defn run!
   "Takes a sequence of command line arguments and a cli spec and runs the
