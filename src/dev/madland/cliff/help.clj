@@ -5,6 +5,70 @@
             [dev.madland.cliff.vendor.tools-cli :as cli*]
             [clojure.string :as str]))
 
+(defn options [opts]
+  (when-not (empty? opts)
+    (utils/text
+     ["Options: "
+      (cli/summarize (cli*/compile-option-specs opts))])))
+
+(defn usage [commands next-commands opts]
+  (utils/text
+   ["Usage:"
+    (str/join " " (-> commands
+                      (utils/conj-some (when-not (empty? opts) "[OPTS]"))
+                      (utils/conj-some (when next-commands
+                                         "<command> <args>"))))]))
+
+(defn description [desc doc]
+  (utils/text
+   [(when desc
+      (utils/text desc))
+
+    (when (and desc doc)
+      "")
+
+    (when doc
+      (utils/text doc))]))
+
+(defn find-subcommands [{:dev.madland.cliff/keys [commands cli] :as ctx}]
+  (letfn [(step [current-commands [command _ & more]]
+            (let [new-commands (conj current-commands command)]
+              (if (= new-commands commands)
+                (map (fn [[cmd props]]
+                       (assoc props :command cmd))
+                     more)
+                (some (partial step new-commands) more))))]
+    (not-empty (step [] (utils/normalize cli)))))
+
+(comment
+
+  (find-subcommands #:dev.madland.cliff{:commands ["foo" "bar"]
+                                        :cli ["foo"
+                                              ["bar" {:opts []}
+                                               ["quux" {:opts []}]
+                                               ["asdasd"]]
+                                              ["baz"]]})
+
+  )
+
+(defn subcommands-list [cmds]
+  (let [spaces (+ (apply max (map #(count (:command %)) cmds)) 2)]
+    (->> cmds
+         (map (fn [{:keys [command desc]}]
+                (str (utils/right-pad command spaces \space) desc)))
+         utils/text)))
+
+(defn subcommands [{:dev.madland.cliff/keys [commands] :as ctx}]
+  (when-some [cmds (find-subcommands ctx)]
+    (utils/text
+     [""
+      "Subcommands:"
+      (subcommands-list cmds)
+      ""
+      (str "Run "
+           (str/join " " commands)
+           " <command> --help for more details.")])))
+
 (defn help [{:dev.madland.cliff/keys [commands cli] :as ctx}]
   (let [{:keys [opts args desc doc]} (utils/get-props cli commands)
 
@@ -15,30 +79,20 @@
                           not-empty)
 
         opts? (boolean (seq opts))]
-    (str/join "\n"
-              ["Usage:"
-               (str/join " " (-> commands
-                                 (utils/conj-some (when opts? "[OPTS]"))
-                                 (utils/conj-some (when next-commands
-                                                    "<command> <args>"))))
-               (when desc
-                 (str/join "\n" ["" desc]))
+    (utils/text
+     [(description desc doc)
 
-               (when doc
-                 (str/join "\n" ["" doc]))
+      ""
 
-               ""
-               "Options: "
-               (cli/summarize (cli*/compile-option-specs opts))
-               (when next-commands
-                 (str/join "\n"
-                           [""
-                            "Subcommands:"
-                            (str/join "\n" next-commands)
-                            ""
-                            (str "Run "
-                                 (str/join " " commands)
-                                 " <command> --help for more details.")]))])))
+      (usage commands next-commands opts)
+
+      ""
+
+      (options opts)
+
+      ""
+
+      (subcommands ctx)])))
 
 (defn wrap-help [_handler]
   (fn [ctx]

@@ -1,5 +1,6 @@
 (ns dev.madland.cliff.utils
-  (:require [dev.madland.cliff.vendor.tools-cli :as cli*]))
+  (:require [dev.madland.cliff.vendor.tools-cli :as cli*]
+            [clojure.string :as str]))
 
 (defn walk-props
   [cli f]
@@ -65,6 +66,25 @@
                    [true false] (into [nil long-opt] more)
                    [false false] (into [short-opt long-opt] more))]
     (conj-some opt-specs opt-spec)))
+
+(defn normalize [cli]
+  (map-props cli identity))
+
+(comment
+
+  (normalize ["foo" ["bar"]])
+
+  )
+
+(defn right-pad [s n ch]
+  (apply str s (repeat (- n (count s)) ch)))
+
+(comment
+  (right-pad "foo" 6 \space)
+
+  (right-pad "foo" 2 \space)
+
+  )
 
 (comment
   (add-opt
@@ -152,3 +172,8 @@
 
 (defn index-by [f coll]
   (into {} (map (juxt f identity)) coll))
+
+(defn text [lines-or-str]
+  (cond-> lines-or-str
+    (coll? lines-or-str)
+    (->> (remove nil?) (str/join "\n"))))
