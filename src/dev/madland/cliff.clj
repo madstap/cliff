@@ -538,9 +538,10 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
              ctx
              parsed-options))
 
-(defn do-fs-effects! [{:keys [fs/executable fs/create value]}]
+(defn do-fs-effects! [{:keys [fs/executable fs/create fs/make-parents value]}]
+  (when (or create make-parents)
+    (io/make-parents value))
   (when create
-    (io/make-parents value)
     (fs/create-file value))
   (when executable
     (-> (fs/file value) (.setExecutable true))))
