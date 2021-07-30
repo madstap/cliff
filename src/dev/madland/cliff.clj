@@ -2,7 +2,9 @@
   (:refer-clojure :exclude [run!])
   (:require [clojure.tools.cli :as cli]
             [clojure.string :as str]
+            [clojure.java.io :as io]
             [clojure.edn :as edn]
+            [clojure.core :as core]
             [dev.madland.cliff.utils :as utils]
             [dev.madland.cliff.types :as types]
             [dev.madland.cliff.vendor.tools-cli :as cli*]
@@ -536,6 +538,27 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
              ctx
              parsed-options))
 
+(defn do-fs-effects! [{:keys [fs/executable fs/create value]}]
+  (when create
+    (io/make-parents value)
+    (fs/create-file value))
+  (when executable
+    (-> (fs/file value) (.setExecutable true))))
+
+(defn exec-fs-effects! [ctx]
+  (->> (map ctx [::parsed-options ::arguments ::env])
+       (mapcat vals)
+       (core/run! do-fs-effects!)))
+
+(defn add-fs-middleware [{::keys [cli] :as ctx}]
+  (let [[command] cli]
+    (update ctx ::cli utils/update-props [command] update :middleware
+            (fnil conj []) (fn [handler]
+                             (fn [ctx]
+                               ;; TODO: Cleanup on error.
+                               (exec-fs-effects! ctx)
+                               (handler ctx))))))
+
 (defn parse-args
   "Given command line arguments and a cli spec, returns a context.
 
@@ -565,6 +588,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
          (assoc ::cli prepped)
          (fetch-env env-vars)
          parse-and-validate-all
+         add-fs-middleware
          add-option-middleware
          merge-config-to-top-level
          (update ::cli mware/apply-middleware)
