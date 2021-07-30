@@ -99,7 +99,7 @@
     (println (help ctx))))
 
 (def help-opt
-  ["-h" "--help" "Print help text for current command."
+  ["-?" "--help" "Print help text for current command."
    :middleware wrap-help])
 
 (defn add-help-opt [props]
