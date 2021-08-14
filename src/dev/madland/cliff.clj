@@ -475,6 +475,14 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
 (defn completions-cli [command]
   [command {:desc "Commands related to completions"}
    ["script" {:desc "Print completion script"
+              :doc ["With bash the completion script can be installed"
+                    "permanently by creating a file in /etc/bash_completion.d"
+                    "For example: (Change <command> to the name of your command.)"
+                    ""
+                    (str "$ <command> " command " script bash | sudo tee /etc/bash_completion.d/<command> >/dev/null")
+                    ""
+                    "or"
+                    (str "$ echo 'source <(<command> " command " script bash)' >> ~/.bashrc")]
               :args [{:id :shell
                       :type :enum
                       :values #{:bash :zsh}}]
