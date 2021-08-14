@@ -5,19 +5,31 @@
             [dev.madland.cliff.vendor.tools-cli :as cli*]
             [clojure.string :as str]))
 
+;; https://stackoverflow.com/questions/9725675/is-there-a-standard-format-for-command-line-shell-help-text
+;; http://docopt.org/
+
 (defn options [opts]
   (when-not (empty? opts)
     (utils/text
-     ["Options: "
+     ["Options:"
       (cli/summarize (cli*/compile-option-specs opts))])))
 
-(defn usage [commands next-commands opts]
+(defn argument [{:keys [optional varargs id]}]
+  (cond-> (str "<" (name id) ">")
+    varargs (as-> $ (str $ "..."))
+    optional (as-> $ (str "[" $ "]"))))
+
+(defn usage [commands next-commands {:keys [opts args]}]
   (utils/text
    ["Usage:"
-    (str/join " " (-> commands
-                      (utils/conj-some (when-not (empty? opts) "[OPTS]"))
-                      (utils/conj-some (when next-commands
-                                         "<command> <args>"))))]))
+    (when next-commands
+      (str/join " " (-> commands
+                        (utils/conj-some (when-not (empty? opts) "[OPTS]"))
+                        (utils/conj-some (when next-commands
+                                           "<command> <args>")))))
+    (when args
+      (str/join " " (concat commands (map argument args))))]))
+
 
 (defn description [desc doc]
   (utils/text
@@ -70,7 +82,7 @@
            " <command> --help for more details.")])))
 
 (defn help [{:dev.madland.cliff/keys [commands cli] :as ctx}]
-  (let [{:keys [opts args desc doc]} (utils/get-props cli commands)
+  (let [{:keys [opts args desc doc] :as props} (utils/get-props cli commands)
 
         ;; FIXME: The ordering is not guaranteed.
         next-commands (-> (utils/cli->commands-map cli)
@@ -84,7 +96,7 @@
 
       ""
 
-      (usage commands next-commands opts)
+      (usage commands next-commands props)
 
       ""
 
