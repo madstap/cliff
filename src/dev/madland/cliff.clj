@@ -94,7 +94,8 @@
             ;; TODO: error handling
             {:keys [options errors] new-arguments :arguments :as parsed}
             (if opts
-              (cli/parse-opts arguments (cli*/remove-unknown-keys opts)
+              (cli/parse-opts arguments (-> (cli*/remove-unknown-keys opts)
+                                            (cli*/compile-option-specs))
                               :in-order (nil? args))
               {:arguments arguments})
 

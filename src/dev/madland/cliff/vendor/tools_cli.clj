@@ -1,15 +1,27 @@
 (ns dev.madland.cliff.vendor.tools-cli
   (:require [clojure.string :as str]))
 
+(defn- split-opt [pred [x & xs :as coll]]
+  (if (or (nil? x) (and (string? x) (pred x)))
+    [x xs]
+    [nil coll]))
+
+(defn sopt-lopt-desc-map [spec]
+  (let [[sopt more] (split-opt #(re-find #"^-[^-]" %) spec)
+        [lopt more] (split-opt #(str/starts-with? % "--") more)
+        [desc more] (split-opt string? more)]
+    {:short-opt sopt
+     :long-opt lopt
+     :desc desc
+     :spec-map (apply hash-map more)}))
+
 (defn- compile-spec [spec]
-  (let [sopt-lopt-desc (take-while #(or (string? %) (nil? %)) spec)
-        spec-map (apply hash-map (drop (count sopt-lopt-desc) spec))
-        [short-opt long-opt desc] sopt-lopt-desc
+  (let [{:keys [short-opt long-opt desc spec-map]} (sopt-lopt-desc-map spec)
         long-opt (or long-opt (:long-opt spec-map))
         [long-opt req] (when long-opt
                          (rest (re-find #"^(--[^ =]+)(?:[ =](.*))?" long-opt)))
         id (when long-opt
-               (keyword (nth (re-find #"^--(\[no-\])?(.*)" long-opt) 2)))
+             (keyword (nth (re-find #"^--(\[no-\])?(.*)" long-opt) 2)))
         validate (:validate spec-map)
         [validate-fn validate-msg] (when (seq validate)
                                      (->> (partition 2 2 (repeat nil) validate)

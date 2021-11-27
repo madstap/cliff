@@ -1,8 +1,34 @@
 (ns dev.madland.cliff-test
   (:require [dev.madland.cliff :as cliff]
+            [dev.madland.cliff.vendor.tools-cli :as cli*]
             #?(:bb [dev.madland.matcher-combinators :refer [match?]]
                :clj [matcher-combinators.test :refer [match?]])
             [clojure.test :refer [deftest testing is]]))
+
+(deftest sopt-lopt-desc-map
+  (is (= {:short-opt "-f",
+          :long-opt "--force",
+          :desc "Force thing",
+          :spec-map {:foo 1}}
+         (cli*/sopt-lopt-desc-map ["-f" "--force" "Force thing" :foo 1])))
+  (is (= {:short-opt nil,
+          :long-opt "--force",
+          :desc "Force thing",
+          :spec-map {:foo 1}}
+         (cli*/sopt-lopt-desc-map ["--force" "Force thing" :foo 1])))
+  (is (= {:short-opt nil,
+          :long-opt nil,
+          :desc "Force thing",
+          :spec-map {:foo 1}}
+         (cli*/sopt-lopt-desc-map ["Force thing" :foo 1])))
+  (is (= {:short-opt nil, :long-opt "--force", :desc nil, :spec-map {:foo 1}}
+         (cli*/sopt-lopt-desc-map ["--force" :foo 1])))
+  (is (= {:short-opt "-f", :long-opt nil, :desc nil, :spec-map {:foo 1}}
+         (cli*/sopt-lopt-desc-map ["-f" :foo 1])))
+  (is (= {:short-opt "-f", :long-opt nil, :desc nil, :spec-map {:foo 1}}
+         (cli*/sopt-lopt-desc-map ["-f" nil :foo 1])))
+  (is (= {:short-opt nil, :long-opt "--force", :desc nil, :spec-map {:foo 1}}
+         (cli*/sopt-lopt-desc-map [nil "--force" :foo 1]))))
 
 (deftest read-arguments-test
   (is (= {:x 1, :y 2} (cliff/read-arguments [1 2] [{:id :x} {:id :y}])))
@@ -193,7 +219,11 @@
                :git-dir "/other/proj/.git"
                :worktree "foo"
                :new-path "bar"}
-              (cliff/parse-args ["--git-dir=/other/proj/.git" "worktree" "move" "foo" "bar"] git))))
+              (cliff/parse-args ["--git-dir=/other/proj/.git" "worktree" "move" "foo" "bar"] git)))
+  (is (match? {:foo true}
+              (cliff/parse-args ["--foo"]
+                                ["cmd" {:opts [["--foo" "foo"]]
+                                        :handler identity}]))))
 
 (defn a&w [line]
   (cliff/args-and-word line (count line)))
