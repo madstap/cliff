@@ -604,13 +604,16 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
          (update ::cli mware/apply-middleware)
          assoc-handler))))
 
+(defn resolve-handler [handler]
+  (cond-> handler (symbol? handler) (-> requiring-resolve deref)))
+
 (defn run!
   "Takes a sequence of command line arguments and a cli spec and runs the
   correct handler with the context as returned by parse-args as the argument.
   Returns nil."
   [args [_ global-props :as cli]]
   (let [{::keys [handler] :as ctx} (parse-args args cli)]
-    (handler ctx)
+    ((resolve-handler handler) ctx)
     nil))
 
 (defn bb!
@@ -632,7 +635,7 @@ complete -o nospace -F {{fn-name}} {{command-name}}")
                    :middleware (fn [handler]
                                  (fn [ctx]
                                    (println "foooo")))]]
-           :handler clojure.pprint/pprint}])
+           :handler `clojure.pprint/pprint}])
 
   ;; TODO: Make these into tests
   ["foo" {}
