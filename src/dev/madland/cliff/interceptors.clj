@@ -9,19 +9,19 @@
 (defn enter [{::keys [queue] :as ctx}]
   (if (empty? queue)
     ctx
-    (let [{:keys [enter] :as interceptor} (peek queue)]
+    (let [{:keys [enter] :or {enter identity} :as interceptor} (peek queue)]
       (recur (-> ctx
                  (update ::queue pop)
                  (update ::stack conj interceptor)
-                 (cond-> (some? enter) enter))))))
+                 enter)))))
 
 (defn leave [{::keys [stack] :as  ctx}]
   (if (empty? stack)
     ctx
-    (let [{:keys [leave]} (pop stack)]
+    (let [{:keys [leave] :or {leave identity}} (peek stack)]
       (recur (-> ctx
                  (update ::stack pop)
-                 (cond-> (some? leave) leave))))))
+                 leave)))))
 
 (defn execute
   ([ctx]
@@ -29,11 +29,9 @@
   ([ctx interceptors]
    (execute (enqueue ctx interceptors))))
 
-
 (defn handler [f & args]
   {:enter (fn [{:keys [params] :as ctx}]
             (assoc ctx :result (apply f params args)))})
-
 
 (comment
 
